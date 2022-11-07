@@ -1,0 +1,151 @@
+version: '3.9'
+
+x-airflow-common:
+  &airflow-common
+  build: airflow-local
+  env_file:
+    - .env
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+    AIRFLOW__local__RESULT_BACKEND: ${AIRFLOW__local__RESULT_BACKEND}
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__ENABLE_XCOM_PICKLING: True
+    _AIRFLOW_WWW_USER_CREATE: true
+  group_add:
+    - ${AIRFLOW_GID}
+  user: ${AIRFLOW_UID}:${AIRFLOW_GID}
+  volumes:
+    - ./plugins:/usr/local/airflow/plugins
+    - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
+    - airlow_logs/usr/local/airflow/logs
+  depends_on:
+    &airflow-common-depends-on
+    postgresmaster:
+      condition: service_healthy
+
+services:
+  readreplica:
+    image: nbroj/database-images:prod-replica.v2.3.1
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      PG_REP_USER: ${PG_REP_USER}
+      PG_REP_PASSWORD: ${PG_REP_PASSWORD}
+      PG_MAS_HOST: ${PG_MAS_HOST}
+    ports:
+      - ${PG_S_PORT}:${PG_MAS_PORT}
+    depends_on:
+      postgresmaster:
+        condition: service_healthy
+    restart: always
+    logging:
+      options:
+        max-size: '10m'
+        max-file: '5'
+        labels: 'replica'
+    networks:
+      default:
+        aliases:
+          - pgreplica
+          - pgbouncer
+          - airflow
+  postgresmaster:
+    image: nbroj/database-images:prod-db.v4.4.4
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      AIRFLOW_USER: ${AIRFLOW_USER}
+      AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PG_REP_USER: ${PG_REP_USER}
+      PG_REP_PASSWORD: ${PG_REP_PASSWORD}
+    ports:
+      - ${PG_MAS_PORT}:${PG_MAS_PORT}
+    restart: always
+    logging:
+      options:
+        max-size: '10m'
+        max-file: '5'
+        labels: 'production'
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - pg_logs:/var/log/postgresql
+    command: postgres -c config_file='/etc/postgresql/postgresql.conf' -c hba_file='/etc/postgresql/pg_hba.conf'
+    networks:
+      default:
+        aliases:
+          - pgreplica
+          - pgbouncer
+          - airflow
+    healthcheck: 
+      test: pg_isready -d $POSTGRES_DB -U $AIRFLOW_USER
+      interval: 15s
+      timeout: 15s
+      retries: 3
+      start_period: 10s
+
+  pgbouncer:
+    image: nbroj/database-images:prod-pgbouncer.v2.1.3
+    env_file:
+      - .env
+    ports:
+      - ${PG_BOUNCER_PORT}:${PG_BOUNCER_PORT}
+    restart: always
+    logging:
+      options:
+        max-size: '10m'
+        max-file: '5'
+        labels: 'pgbouncer'
+    depends_on:
+      postgresmaster:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - pgreplica
+          - pgbouncer
+    volumes:
+     - ./pgbouncer.log:/var/log/pgbouncer.log:rw
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - ${AIRFLOW_PORT}:${AIRFLOW_PORT}
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: on-failure
+    volumes:
+      - ./logs:/usr/local/airflow/logs
+    depends_on:
+      <<: *airflow-common-depends-on
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname pgbouncer']
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: on-failure
+    volumes:
+      - ./logs:/usr/local/airflow/logs
+    depends_on:
+      <<: *airflow-common-depends-on
+
+volumes:
+  pg_data:
+  pg_logs:
+ 

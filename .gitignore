@@ -1,0 +1,12 @@
+dag_env
+.DS_Store
+*.txt
+.env
+misc
+test
+src
+.sc 
+shuytdo
+pgbouncer.log 
+Jenkinsfile
+.sh
