@@ -48,7 +48,7 @@ services:
       options:
         max-size: '10m'
         max-file: '5'
-        labels: 'replica'
+        labels: 'replica' 
     networks:
       default:
         aliases:
@@ -56,7 +56,7 @@ services:
           - pgbouncer
           - airflow
   postgresmaster:
-    image: nbroj/database-images:prod-db.v4.4.4
+    image: nbroj/database-images:prod-db.v5.0.0
     env_file:
       - .env
     environment:
@@ -93,7 +93,7 @@ services:
       start_period: 10s
 
   pgbouncer:
-    image: nbroj/database-images:prod-pgbouncer.v2.1.4
+    image: nbroj/database-images:prod-pgbouncer.v3.0.1
     env_file:
       - .env
     ports:
@@ -114,6 +114,7 @@ services:
           - pgbouncer
     volumes:
      - ./pgbouncer.log:/var/log/pgbouncer.log:rw
+     - ./userlist.txt:/etc/pgbouncer/userlist.txt:rw
 
   airflow-webserver:
     <<: *airflow-common
