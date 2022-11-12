@@ -1,13 +1,11 @@
 """ Responsible for data extraction, cleaning and loading, as well as data transformations via sql procedure calls."""
 from __future__ import annotations
 from abc import ABC, abstractmethod
-import logging
 from connections import PostgresClient, SnowflakeClient, S3Client
 from colours import Colours
 from decouple import config
 import datetime
 import pandas as pd
-import os
 # --------------------------------------------------------------------------------------------------
 
 class Processor(ABC):
@@ -579,6 +577,12 @@ class WarehouseETL(Processor):
         pass
      
     def create_championship_views(self, postgres_uri) -> None:
+        pass
+    
+    def extract_quali_telem(self, cache_dir) -> None:
+        pass
+    
+    def extract_race_telem(self, cache_dir) -> None:
         pass
 
 class Director:
