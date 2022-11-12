@@ -1,7 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 import os
-import random
 from decouple import config
 
 class IConnection(ABC):
@@ -9,7 +8,7 @@ class IConnection(ABC):
     provisions db connections """
     
     @abstractmethod
-    def createConnection(self) -> str:
+    def create_connection(self) -> str:
         """"Default interface method to provision the new db connection string"""
         pass
     
@@ -17,6 +16,10 @@ class PostgresConnection(IConnection):
     """ Postgres connection class which provides the connection string for all database users needed for ETL.
         includes a conditional initialization method as well as a connection creation method - both depend on user input at runtime 
         (dag cycles)"""
+      
+    # protected variable 
+    _postgres_uri = ""
+    
     def __init__(self, arg):
         
         if arg == 1:  
@@ -30,14 +33,18 @@ class PostgresConnection(IConnection):
         
         # take input in main program which validates input and produces conn string 
         # for one of two database users
-
-        postgres_uri = PostgresConnection(arg)
+        
+        postgres_uri = self._postgres_uri
         return postgres_uri
     
     
 class SnowflakeConnection(IConnection):
     """ SnowflakeConnection class which provides a connection URI for all users of the snowflake data warehouse
         will provision read/write access to the dw dev for airflow processes."""
+        
+    # protected variable 
+    _snowflake_uri = ""
+    
     def __init__(self):
         self.snowflake_uri = config('SNOWFLAKE_URI')
  
@@ -45,7 +52,8 @@ class SnowflakeConnection(IConnection):
         """ Generate snowflake connection string for db connection"""
         
         # take input in main program which validates input and produces conn string from .env file 
-        snowflake_uri = SnowflakeConnection()
+        snowflake_uri = self._snowflake_uri 
+    
         return snowflake_uri
     
     def upsert_wh(self, conn, ti):
@@ -58,6 +66,13 @@ class S3Connection(IConnection):
         DB ETL, 
         DAG logs 
         ,and DW ETL."""
+        
+    # protected variables 
+    _s3_key = ""
+    _s3_secret = ""
+    _s3_region = ""
+    _s3_bucket = ""
+    
     def __init__(self):
 
         self.aws_key = config('AWS_KEY_ID')
@@ -70,11 +85,10 @@ class S3Connection(IConnection):
         
         # generate aws access which grants access to s3 bucket for storage
    
-        s3 = S3Connection()
-        s3_key = s3.aws_key  #s3 aws key 
-        s3_secret = s3.aws_secret #s3 secret key
-        s3_region = s3.aws_region #s3 region
-        s3_bucket = s3.aws_bucket #s3 bucket
+        s3_key = self._s3_key  #s3 aws key 
+        s3_secret = self._w3_secret #s3 secret key
+        s3_region = self._s3_region #s3 region
+        s3_bucket = self._s3_bucket #s3 bucket
 
         return s3_key, s3_secret, s3_region, s3_bucket
     
@@ -95,6 +109,7 @@ class PostgresClient(AbstractClient):
     
     def connection_factory(self, arg, col) -> IConnection:
         """ Provision connections to either the db dev or dw dev"""
+        import logging
         
         try:
             if arg == 1: # flow of control for the database developer in ETL 
@@ -106,7 +121,7 @@ class PostgresClient(AbstractClient):
                 # call function to create connection
                 postgres_conn = self.get_connection_id(postgres)
         except ValueError:
-                print(col.boldFont + col.redFont +
+                logging.error(col.boldFont + col.redFont +
                   "[ERROR] " + col.endFont + "Integer out of range.")
             
         return postgres_conn
@@ -129,7 +144,7 @@ class PostgresClient(AbstractClient):
             logging.error("Database URI is incorrect.")
             
         #determining the load type for the database from the branch operator of airflow 
-        check_load_type = ti.xcom_pull(task_ids='check_load_type')
+        check_load_type = ti.xcom_pull(task_ids='determine_extract_format')
           
         if check_load_type == "incremental_extract":
             dest_dir = full_processed_dir
@@ -153,7 +168,7 @@ class PostgresClient(AbstractClient):
                 try:
                     pg_hook.copy_expert(query, file)
                 except ProgrammingError:
-                    logging.error("error writing data to table")
+                    logging.error("Error writing data to table.")
                 finally: 
                     pg_connection.close()
         
@@ -188,7 +203,13 @@ class SnowflakeClient(AbstractClient):
         return snowflake_conn
     
 class S3Client(AbstractClient):
-    """ """
+    """This class represents the client who wishes to utilise an AWS S3 connection"""
+    
+    def get_connection_id(self, database_conn):
+        """Overriding default implementation for unpacking of tuple """
+        
+        s3_key, s3_secret, s3_region, s3_bucket  = self.get_connection_id(database_conn)
+        
     def connection_factory(self) -> IConnection:
         """ Provision connections to the dw dev only by instantiating s3 class and invoking its method.
             Then retrieves the s3 aws key, secret key, region name and the name of the s3 bucket to pass to the client."""
