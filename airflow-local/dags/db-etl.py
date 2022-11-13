@@ -131,7 +131,7 @@ with DAG(
                                           )
    
 # Defining task dependencies 
-
+ 
 _determine_format >> full_extract_load >> transform_full >> create_champ_views
 _determine_format >> incremental_extract_load >> change_data_capture >> transform_inc >> create_champ_views
 
