@@ -1,6 +1,5 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-import os
 from decouple import config
 
 class IConnection(ABC):
@@ -147,11 +146,11 @@ class PostgresClient(AbstractClient):
         check_load_type = ti.xcom_pull(task_ids='determine_extract_format')
           
         if check_load_type == "incremental_extract":
-            dest_dir = full_processed_dir
+            dest_dir = inc_processed_dir
         else: 
             try:
                 assert check_load_type == "full_extract"
-                dest_dir = inc_processed_dir
+                dest_dir = full_processed_dir
             except AssertionError:
                 logging.error("'check_load_type' variable in airflow task_id empty.")
                 logging.info("Ensure this variable has been set.")
@@ -174,7 +173,7 @@ class PostgresClient(AbstractClient):
         
         return
         
-    def changed_data_capture(self, conn):
+    def changed_data_capture(self, conn, extract_dt):
         """ Check the database tables for new rows to insert these ones only. 
             This is a function aimed for incremental updates of race data"""
            
@@ -188,7 +187,7 @@ class PostgresClient(AbstractClient):
         pg_cursor = pg_connection.cursor()
         
         pass
-         
+      
 class SnowflakeClient(AbstractClient):
     """The SnowflakeClient class represents the user who requires the connection and fetches it from the connection class. """
     def connection_factory(self) -> IConnection:
