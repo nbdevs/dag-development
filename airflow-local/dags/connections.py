@@ -220,4 +220,4 @@ class S3Client(AbstractClient):
         s3_key, s3_secret, s3_region, s3_bucket  = self.get_connection_id(s3)
 
         return s3_key, s3_secret, s3_region, s3_bucket
-         
+          
