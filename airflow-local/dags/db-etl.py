@@ -87,6 +87,15 @@ def get_taskg(dag, group_id, default_args):
                                                         sla=timedelta(minutes=10))
     return transform_inc
 
+def _changed_data_detected(self, db_director, ti):
+    """ Function retrieves the xcomms values for the dataframes for race, result, qualifying, and telemetry data required in order to serialise the data 
+    and upserts into the postgres database - this function is specific to the incremental flow of control. Also takes a reference to a DatabaseETL
+    object and a task instance object."""
+    
+    # calling method from passed class object
+    db_director.changed_data_detected(ti)
+    return
+
 # Defining baseline arguments for DAGs
 default_args = {
     'start_date': datetime(2022, 8, 1),
@@ -131,6 +140,12 @@ with DAG(
                                                sla=timedelta(minutes=20),
                                                do_xcom_push=True
     )
+    
+    changed_data_detected = PythonOperator(task_id='changed_data_detected',
+                                           params={"db_director" : Param(db_director, type="object")},
+                                           python_callable=_changed_data_detected,
+                                           sla=timedelta(minutes=15)
+    )
 
     transform_full = get_task_group(db_etl, 'transform_full', default_args)
 
@@ -144,4 +159,4 @@ with DAG(
 # Defining task dependencies
 
 determine_format >> full_extract_load
-determine_format >> incremental_extract_load >> change_data_capture 
+determine_format >> incremental_extract_load >> change_data_capture >> changed_data_detected
