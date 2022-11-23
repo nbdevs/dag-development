@@ -93,17 +93,17 @@ class DatabaseETL(Processor):
         from airflow.exceptions import XComNotFound
         
         try:
-            ti.xcom_pull(key='extract_format',task_id='_determine_format')
+            ti.xcom_pull(task_id='_determine_format', key='extract_format')
             logging.info("Incremental load chosen as extract format")
             load_type = "extract_incremental"
-            ti.xcom_push(key='extract_format', value=load_type)
+            ti.xcom_push(task_ids='determine_extract_format', key='extract_format', value=load_type)
             return load_type
             
         except XComNotFound:
             logging.error("XComms variable has not been created...")
             logging.info("Full load chosen as extract format...")
             load_type = "extract_full"
-            ti.xcom_push(key='extract_format', value=load_type)
+            ti.xcom_push(task_ids='determine_extract_format', key='extract_format', value=load_type)
             return load_type
         
     def postgres_transformations(self):
