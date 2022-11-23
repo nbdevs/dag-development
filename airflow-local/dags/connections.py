@@ -143,7 +143,7 @@ class PostgresClient(AbstractClient):
             logging.error("Database URI is incorrect.")
             
         #determining the load type for the database from the branch operator of airflow 
-        check_load_type = ti.xcom_pull(task_ids='determine_extract_format')
+        check_load_type = ti.xcom_pull(task_ids='determine_extract_format', key='extract_format')
           
         if check_load_type == "incremental_extract":
             dest_dir = inc_processed_dir
