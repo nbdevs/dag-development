@@ -66,6 +66,7 @@ RUN set -ex \
 #copying to container all config files needed to set up airflow 
 COPY --chown=airflow:root ./config/airflow.cfg ${AIRFLOW_USER_HOME}/
 COPY --chown=airflow:root ./dags ${AIRFLOW_USER_HOME}/dags
+COPY --chown=airflow:root ./logs ${AIRFLOW_USER_HOME}/logs
 COPY --chown=airflow:root ./requirements-py3.9.txt ${AIRFLOW_USER_HOME}/
 
 #setting permissions on root directories for airflow user
