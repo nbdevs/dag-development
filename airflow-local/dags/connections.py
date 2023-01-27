@@ -1,7 +1,5 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from decouple import config
-
 class IConnection(ABC):
     """ Interface which all forms of db connections must implement.
     provisions db connections """
@@ -20,6 +18,8 @@ class PostgresConnection(IConnection):
     _postgres_uri = ""
     
     def __init__(self, arg):
+        
+        from decouple import config
         
         if arg == 1:  
             self.postgres_uri = config('POSTGRES_URI_DB')
@@ -45,6 +45,9 @@ class SnowflakeConnection(IConnection):
     _snowflake_uri = ""
     
     def __init__(self):
+        
+        from decouple import config
+        
         self.snowflake_uri = config('SNOWFLAKE_URI')
  
     def create_connection(self) -> str: 
@@ -73,6 +76,8 @@ class S3Connection(IConnection):
     _s3_bucket = ""
     
     def __init__(self):
+        
+        from decouple import config
 
         self.aws_key = config('AWS_KEY_ID')
         self.aws_secret_key = config('AWS_SECRET_KEY')
@@ -145,11 +150,11 @@ class PostgresClient(AbstractClient):
         #determining the load type for the database from the branch operator of airflow 
         check_load_type = ti.xcom_pull(task_ids='determine_extract_format', key='extract_format')
           
-        if check_load_type == "incremental_extract":
+        if check_load_type == "Incremental":
             dest_dir = inc_processed_dir
         else: 
             try:
-                assert check_load_type == "full_extract"
+                assert check_load_type == "Full"
                 dest_dir = full_processed_dir
             except AssertionError:
                 logging.error("'check_load_type' variable in airflow task_id empty.")
@@ -173,15 +178,14 @@ class PostgresClient(AbstractClient):
         
         return
         
-    def changed_data_capture(self, conn, extract_dt):
+    def changed_data_capture(self, conn, extract_dt, results_table, qualifying_table, race_telem_table, quali_telem_table):
         """ Check the database tables for new rows to insert these ones only. 
             This is a function aimed for incremental updates of race data"""
            
         from datetime import datetime
         from airflow.providers.postgres.hooks.postgres import PostgresHook
         import pandas as pd
-        import os
-            
+    
         pg_hook = PostgresHook(conn)
         pg_connection = pg_hook.get_conn()
         pg_cursor = pg_connection.cursor()
