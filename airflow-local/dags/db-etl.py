@@ -19,7 +19,7 @@ col = Colours()
 db_handler = DatabaseETL(col)  # class responsible for database ETL
 dw_handler = WarehouseETL(col)  # class responsible for warehouse ETL
 # director composes objects which are loaded into database
-db_director = Director(col, start_date, end_date, db_handler, dw_handler)
+db_director = Director(start_date, end_date, col, db_handler, dw_handler)
 pg_conn = PostgresConnection(1)
 client = PostgresClient()
 
@@ -53,7 +53,7 @@ def _determine_format(ti) -> str:
 
 # extract and load new data into database
 
-def load_db(db_director, ti):
+def _load_db(db_director, ti):
     """This function calls the extract and load function to kick off the pipeline.
     Takes three arguments, the first being the ETL orchestration class as a param, the second being the decision of full load vs incremental load, and finally a 
     reference to the task instance to push the results to the airflow metadata database."""
@@ -193,14 +193,14 @@ with DAG(
 
     full_extract_load = PythonOperator(
         task_id='full_extract_load',
-        python_callable=load_db,
+        python_callable=_load_db,
         op_kwargs={"db_director": db_director},
         sla=timedelta(minutes=240)
     )
 
     incremental_extract_load = PythonOperator(
         task_id='incremental_extract_load',
-        python_callable=load_db,
+        python_callable=_load_db,
         op_kwargs={"db_director": db_director},
         sla=timedelta(minutes=20)
     )

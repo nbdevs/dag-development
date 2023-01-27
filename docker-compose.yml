@@ -19,9 +19,8 @@ x-airflow-common:
     - ${AIRFLOW_GID}
   user: ${AIRFLOW_UID}:${AIRFLOW_GID}
   volumes:
-    - ./plugins:/usr/local/airflow/plugins
     - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
-    - airlow_logs/usr/local/airflow/logs
+    - ./airflow-local/logs:/usr/local/airflow/logs:rw
   depends_on:
     &airflow-common-depends-on
     postgresmaster:
@@ -93,7 +92,7 @@ services:
       start_period: 10s
 
   pgbouncer:
-    image: nbroj/database-images:prod-pgbouncer.v3.0.1
+    image: nbroj/database-images:prod-pgbouncer.v3.0.2
     env_file:
       - .env
     ports:
@@ -113,8 +112,8 @@ services:
           - pgreplica
           - pgbouncer
     volumes:
-     - ./pgbouncer.log:/var/log/pgbouncer.log:rw
-     - ./userlist.txt:/etc/pgbouncer/userlist.txt:rw
+     - ./pgbouncer/pgbouncer.log:/var/log/pgbouncer.log:rw
+     - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:rw
 
   airflow-webserver:
     <<: *airflow-common
@@ -128,7 +127,12 @@ services:
       retries: 5
     restart: on-failure
     volumes:
-      - ./logs:/usr/local/airflow/logs
+      - ./airflow-local/logs:/usr/local/airflow/logs:rw
+    extra_hosts:
+      - "airflow-worker1:192.168.0.49"
+      - "airflow-worker2:192.168.0.49"
+      - "airflow-worker3:192.168.0.49"
+      - "airflow-worker4:192.168.0.49"
     depends_on:
       <<: *airflow-common-depends-on
 
@@ -142,11 +146,10 @@ services:
       retries: 5
     restart: on-failure
     volumes:
-      - ./logs:/usr/local/airflow/logs
+      - ./airflow-local/logs:/usr/local/airflow/logs:rw
     depends_on:
       <<: *airflow-common-depends-on
 
 volumes:
   pg_data:
   pg_logs:
- 
