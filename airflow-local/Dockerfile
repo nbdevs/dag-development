@@ -10,7 +10,6 @@ ENV TERM linux
 ARG AIRFLOW_VERSION=2.4.2
 ARG AIRFLOW_USER_HOME=/usr/local/airflow
 ENV AIRFLOW_HOME=${AIRFLOW_USER_HOME}
-ENV PATH="$AIRFLOW_HOME/.local/bin:$PATH"
 
 # Define en_US.
 ENV LANGUAGE en_US.UTF-8
@@ -67,7 +66,8 @@ RUN set -ex \
 COPY --chown=airflow:root ./config/airflow.cfg ${AIRFLOW_USER_HOME}/
 COPY --chown=airflow:root ./dags ${AIRFLOW_USER_HOME}/dags
 COPY --chown=airflow:root ./logs ${AIRFLOW_USER_HOME}/logs
-COPY --chown=airflow:root ./requirements-py3.9.txt ${AIRFLOW_USER_HOME}/
+COPY --chown=airflow:root ./requirements-py3.9.txt ${AIRFLOW_USER_HOME}/requirements-py3.9.txt
+COPY --chown=airflow:root ./cache ${AIRFLOW_USER_HOME}/cache
 
 #setting permissions on root directories for airflow user
 RUN chown -R airflow:root ${AIRFLOW_USER_HOME}
@@ -79,12 +79,16 @@ RUN chmod +x /entrypoint.sh
 
 # switch to airflow user to bypass permissions in container 
 USER airflow
-WORKDIR ${AIRFLOW_USER_HOME}
+ENV PYTHONPATH = "${PYTHONPATH}:${AIRFLOW_HOME}"
+ENV PYTHONPATH = "${PYTHONPATH}:$AIRFLOW_HOME/.local/lib/python3.9/site-packages"
 
-#upgrade pip and install dependnencies needed to build pscyopg2 module 
-RUN pip install -U pip setuptools wheel psycopg2 python-decouple
-#install from requiremnts.txt to reduce the startup time for airflow scheduler
-RUN pip install 'apache-airflow[postgres,celery,amazon,hive,kubernetes,ftp,http,sftp,jdbc,snowflake,ssh,sqlite,imap,s3]'==${AIRFLOW_VERSION} --constraint ${AIRFLOW_USER_HOME}/requirements-py3.9.txt 
+# creating set up tools and wheels to create custom python packages
+# upgrade pip and install dependnencies needed to build pscyopg2 module 
+RUN pip3.9 install --no-cache-dir setuptools wheel psycopg2 python-decouple fastf1
+#install from requiremnts.txt to reduce the startup time for airflow scheduler, and install local packages to airflow image
+RUN pip3.9 install --no-cache-dir 'apache-airflow[postgres,celery,amazon,hive,kubernetes,ftp,http,sftp,jdbc,snowflake,ssh,sqlite,imap,s3]'==${AIRFLOW_VERSION} --constraint ${AIRFLOW_USER_HOME}/requirements-py3.9.txt 
+
+WORKDIR ${AIRFLOW_USER_HOME}
 
 EXPOSE 8080 8793
 ENTRYPOINT ["/entrypoint.sh"]
