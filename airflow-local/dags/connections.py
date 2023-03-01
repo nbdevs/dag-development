@@ -1,5 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
+
 class IConnection(ABC):
     """ Interface which all forms of db connections must implement.
     provisions db connections """
