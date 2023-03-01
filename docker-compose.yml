@@ -21,6 +21,7 @@ x-airflow-common:
   volumes:
     - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
     - ./airflow-local/logs:/usr/local/airflow/logs:rw
+    - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
   depends_on:
     &airflow-common-depends-on
     postgresmaster:
@@ -128,6 +129,8 @@ services:
     restart: on-failure
     volumes:
       - ./airflow-local/logs:/usr/local/airflow/logs:rw
+      - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
+    
     extra_hosts:
       - "airflow-worker1:192.168.0.49"
       - "airflow-worker2:192.168.0.49"
@@ -147,6 +150,7 @@ services:
     restart: on-failure
     volumes:
       - ./airflow-local/logs:/usr/local/airflow/logs:rw
+      - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
     depends_on:
       <<: *airflow-common-depends-on
 
