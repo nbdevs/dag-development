@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from connections import PostgresClient, SnowflakeClient, S3Client
 from colours import Colours
-import pandas as pd
+
 # --------------------------------------------------------------------------------------------------
 
 class Processor(ABC):
@@ -11,7 +11,8 @@ class Processor(ABC):
     in the system, aggregates them accordingly and passes the result to airflow to store in x-coms.
     Base class with empty functions for overriding."""
     
-    from datetime import datetime
+    from datetime import datetime 
+    import pandas as pd
     
     @abstractmethod    
     def is_not_empty(self, s):
@@ -39,6 +40,14 @@ class Processor(ABC):
     
     @abstractmethod
     def incremental_results(self, cache_dir) -> pd.DataFrame:
+        pass
+    
+    @abstractmethod
+    def incremental_quali_telem(self, cache_dir) -> pd.DataFrame:
+        pass
+    
+    @abstractmethod
+    def incremental_race_telem(self, cache_dir) -> pd.DataFrame:
         pass
     
     @abstractmethod
@@ -85,35 +94,42 @@ class Processor(ABC):
 class DatabaseETL(Processor):
     """Follows the implementation details provided in the interface in order to build the dataframe in the specified manner needed for the respective data grain.
     Class for pre-processing/aggregation of the formula one data from API."""
-
+    
+    import pandas as pd
+    
     def __init__(self, col) -> pd.DataFrame:
         """Each new instance contains a colours class for formatting logging info."""
         self._col = col
-         
-    def is_not_empty(self, s):
-        return bool(s and s.isspace())  
+    
+    def is_not_empty(self, s, pathway):
+        """ Function responsible for detecting presence of white space or emptiness in contents of a file.
+        Will then be used to determine which pathway should be followed for ETL. 
+        Returns Full or Incremental. """
+        
+        import os
+
+        return bool(s and s.isspace() or os.stat(pathway).st_size==0)  
+
                 
-    def determine_format(self) -> str:
+    def determine_format(self, pathway) -> str:
         """Function which determines if incremental or full load is necessary."""
  
         import logging
-        from decouple import config
         
         #string holder for load type of the etl pipeline
         load_type = ["Full", "Incremental"]
-        pathway = config("pathway")
         lines = ""
-        
+         
         with open(pathway, "r") as file:
             lines = file.readline()
-        if self.is_not_empty(lines) == True:
+        if self.is_not_empty(lines, pathway) == False:
             logging.info("INCREMENTAL LOAD chosen as extract format.")
             with open(pathway, "a") as writefile:
                 var = load_type[1]
                 writefile.write("{0}".format(var))
                 writefile.write("\n")
             return var
-        elif self.is_not_empty(lines) == False:
+        elif self.is_not_empty(lines, pathway) == True:
             logging.info("FULL LOAD chosen as extract format.")
             with open(pathway, "w") as wfile:
                 variable = load_type[0]
@@ -128,9 +144,9 @@ class DatabaseETL(Processor):
         """ Extracts the season grain data from the api and aggregates them together ready for loading into the database.
             takes a target cache directory as the input for first variable,
             start date and end date for extraction of f1 data as the next two. """
-       
-        import os 
+
         import logging
+        import os 
         import fastf1 as f1
         import pandas as pd
         import numpy as np 
@@ -358,7 +374,7 @@ class DatabaseETL(Processor):
         from decouple import config
         
         extract_dt = datetime.today().strftime("%Y-%m-%d")
-        cache_dir = config("incremental_qualifying")
+        cache_dir = config("inc_qualifying")
         cache_dp = cache_dir.format(extract_dt)
         
         pass
@@ -372,7 +388,31 @@ class DatabaseETL(Processor):
         from decouple import config
         
         extract_dt = datetime.today().strftime("%Y-%m-%d")
-        cache_dir = config("incremental_results")
+        cache_dir = config("inc_results")
+        cache_dp = cache_dir.format(extract_dt)
+        
+        pass
+    
+    def incremental_quali_telem(self):
+        import logging
+        import os
+        from datetime import datetime 
+        from decouple import config
+        
+        extract_dt = datetime.today().strftime("%Y-%m-%d")
+        cache_dir = config("inc_qualitelem")
+        cache_dp = cache_dir.format(extract_dt)
+        
+        pass
+    
+    def incremental_race_telem(self):
+        import logging
+        import os
+        from datetime import datetime 
+        from decouple import config 
+        
+        extract_dt = datetime.today().strftime("%Y-%m-%d")
+        cache_dir = config("inc_racetelem")
         cache_dp = cache_dir.format(extract_dt)
         
         pass
@@ -607,6 +647,7 @@ class WarehouseETL(Processor):
     Class for ETL from AWS S3 files into s3 stage in Snowflake."""
     
     from datetime import datetime
+    import pandas as pd
     
     def __init__(self, col) -> pd.DataFrame:
         """Each new instance contains a colours class used for formatting."""
@@ -631,6 +672,12 @@ class WarehouseETL(Processor):
         pass
     
     def incremental_results(self, cache_dir) -> pd.DataFrame:
+        pass
+    
+    def incremental_quali_telem(self) -> pd.DataFrame:
+        pass
+    
+    def incremental_race_telem(self) -> pd.DataFrame:
         pass
     
     def serialize_full(self, race_table, driver_table, season_table, race_telem_table, quali_telem_table)-> datetime:
@@ -659,6 +706,8 @@ class Director:
     Two functions for each process to upsert into database, and to effective load the data into data stores and then call 
     a stored procedure for the SQL (postgres, snowsql) transformations."""
 
+    import pandas as pd
+    
     def __init__(self, startPeriod, endPeriod, col, db_processor, dw_processor) -> pd.DataFrame:
         
         from decouple import config
@@ -668,8 +717,8 @@ class Director:
         self._postgres = PostgresClient() # conn string for db dev or dw dev 
         self._snowflake = SnowflakeClient() # snowflake client connection details 
         self._s3_storage = S3Client() # s3 client connection details
-        self._startPeriod = startPeriod # start period for season of formula 1 data 
-        self._endPeriod = endPeriod # end period for season of formula 1 data 
+        self._start_date = startPeriod # start period for season of formula 1 data 
+        self._end_date = endPeriod # end period for season of formula 1 data 
         self._col = col # A colour formatting class
         self._fl_season_dir = config("season") # env variable for directory to store cache for full load season
         self._fl_results_dir = config("results") # env variable for directory to store cache for full load results
@@ -677,70 +726,71 @@ class Director:
         self._fl_telem_dir = config("telemetry" )# env variable for directory to store cache for full load telemetry
         self._inc_results = config("inc_results") # env variable for directory to store cache for results
         self._inc_qualifying = config("inc_qualifying") # env variable for directory to store cache for incremental qualifying
-        self._inc_telem = config("inc_telemetry") # env variable for directory to store cache for incremental telemetry
+        self._inc_qualitelem = config("inc_qualitelem") # env variable for directory to store cache for incremental quali telemetry
+        self._inc_racetelem = config("inc_racetelem") # env variable for directory to store cache for incremental race telemetry
         self._full_processed_dir= config("full_processed_dir") # stores the csv files for full load
         self._inc_processed_dir= config("inc_processed_dir") # stores the csv files for incremental load 
 
-def load_db(self, ti, decision) -> None:
-    """ Helper function which coordinates the extract and cleaning processes involved in a full and incremental load.
-        Which process is implemented depends on the decision variable of either 1 or 2."""
-    
-    import logging
-    
-    # Calling methods to create pandas dataframes for full load - season wide
-    if decision == 1:
+    def load_db(self, ti, decision) -> None:
+        """ Helper function which coordinates the extract and cleaning processes involved in a full and incremental load.
+            Which process is implemented depends on the decision variable of either 1 or 2."""
+        
+        import logging
+        
+        # Calling methods to create pandas dataframes for full load - season wide
+        if decision == 1:
 
-        logging.info("-----------------------------------Data extraction, cleaning and conforming-----------------------------------------")
-        logging.info("Extracting Aggregated Season Data...")
-        season_table = self._db_builder.extract_season_grain(self._fl_season_dir, self._start_date, self._end_date)
-        logging.info("Extracting Aggregated Qualifying Data.")
-        qualifying_table = self._db_builder.extract_qualifying_grain(self.fl_results_dir, self._start_date, self._end_date)
-        logging.info("Extracting Aggregated Results Data...")
-        results_table = self._db_builder.extract_race_grain(self.fl_race_dir, self._start_date, self._end_date)
-        logging.info("Extracting Aggregated Telemetry Data...")
-        race_telem_table = self._db_builder.extract_race_telemetry(self.fl_telem_dir, self._start_date, self._end_date)
-        quali_telem_table = self._db_builder.extract_quali_telemetry(self.fl_telem_dir, self._start_date, self._end_date)
-        logging.info("Serializing pandas Tables into CSV...")
-        extract_dt = self._builder.serialize_full(results_table, qualifying_table, season_table, race_telem_table, quali_telem_table)
-        logging.info("Upserting data into Postgres ")
-        #initializing postgres client 
+            logging.info("-----------------------------------Data extraction, cleaning and conforming-----------------------------------------")
+            logging.info("Extracting Aggregated Season Data...")
+            season_table = self._db_builder.extract_season_grain(self._fl_season_dir, self._start_date, self._end_date)
+            logging.info("Extracting Aggregated Qualifying Data.")
+            qualifying_table = self._db_builder.extract_qualifying_grain(self.fl_results_dir, self._start_date, self._end_date)
+            logging.info("Extracting Aggregated Results Data...")
+            results_table = self._db_builder.extract_race_grain(self.fl_race_dir, self._start_date, self._end_date)
+            logging.info("Extracting Aggregated Telemetry Data...")
+            race_telem_table = self._db_builder.extract_race_telemetry(self.fl_telem_dir, self._start_date, self._end_date)
+            quali_telem_table = self._db_builder.extract_quali_telemetry(self.fl_telem_dir, self._start_date, self._end_date)
+            logging.info("Serializing pandas Tables into CSV...")
+            extract_dt = self._builder.serialize_full(results_table, qualifying_table, season_table, race_telem_table, quali_telem_table)
+            logging.info("Upserting data into Postgres ")
+            #initializing postgres client 
+            postgres_client = self._postgres
+            postgres_conn_uri = postgres_client.connection_factory(1, self._col,) # calling connection method to get connection string with 1 specified for the database developer privileges
+            postgres_client.upsert_db(postgres_conn_uri, ti, self._inc_processed_dir, self._full_processed_dir, extract_dt)
+            
+            return
+
+        # method to call to create pandas dataframes for incremental load - race by race
+        elif decision == 2:
+            
+            logging.info("-----------------------------------Data extraction, cleaning and conforming-----------------------------------------")
+            logging.info("Extracting Aggregated Qualifying Data.")
+            qualifying_table = self._db_builder.incremental_qualifying(self.fl_qualifying_dir, self._start_date, self._end_date)
+            logging.info("Extracting Aggregated Results Data...")
+            results_table = self._db_builder.incremental_results(self.fl_results_dir, self._start_date, self._end_date)
+            logging.info("Extracting aggregated Telemetry data... ")
+            quali_telem_table = self._db_builder.incremental_quali_telem(self.inc_qualitelem, self._start_date, self._end_date)
+            race_telem_table = self._db_builder.incremental_race_telem(self.inc_racetelem, self._start_date, self._end_date)
+            
+            return results_table, qualifying_table, race_telem_table, quali_telem_table
+
+    def change_data_detected(self, ti, qualifying_table, results_table, race_telem_table, quali_telem_table, extract_dt):
+        """ This function follows on from the incremental pathway of the load_db function, after new change data is detected which needs to be reflected in the database.
+        If changed data has been detected and the dag run has not been short circuited by the operator then this 
+        function serialises and pushes the new data into the database.
+        Takes a task instance object as a reference."""
+        
+        import logging 
+
+        logging.info("Creating new postgres connection...")
+        #initialising postgres client 
         postgres_client = self._postgres
         postgres_conn_uri = postgres_client.connection_factory(1, self._col,) # calling connection method to get connection string with 1 specified for the database developer privileges
+        logging.info("Upserting data into Postgres")
+        #initializing postgres client 
         postgres_client.upsert_db(postgres_conn_uri, ti, self._inc_processed_dir, self._full_processed_dir, extract_dt)
         
         return
-
-    # method to call to create pandas dataframes for incremental load - race by race
-    elif decision == 2:
         
-        logging.info("-----------------------------------Data extraction, cleaning and conforming-----------------------------------------")
-        logging.info("Extracting Aggregated Qualifying Data.")
-        qualifying_table = self._db_builder.increment_qualifying(self.fl_qualifying_dir, self._start_date, self._end_date)
-        logging.info("Extracting Aggregated Results Data...")
-        results_table = self._db_builder.increment_results(self.fl_results_dir, self._start_date, self._end_date)
-        logging.info("Extracting aggregated Telemetry data... ")
-        quali_telem_table = self._db_builder.increment_quali_telem(self.fl_telem_dir, self._start_date, self._end_date)
-        race_telem_table = self._db_builder.increment_race_telem(self.fl_telem_dir, self._start_date, self._end_date)
-        
-        return results_table, qualifying_table, race_telem_table, quali_telem_table
-
-def change_data_detected(self, ti, qualifying_table, results_table, race_telem_table, quali_telem_table, extract_dt):
-    """ This function follows on from the incremental pathway of the load_db function, after new change data is detected which needs to be reflected in the database.
-     If changed data has been detected and the dag run has not been short circuited by the operator then this 
-    function serialises and pushes the new data into the database.
-    Takes a task instance object as a reference."""
-    
-    import logging 
-
-    logging.info("Creating new postgres connection...")
-    #initialising postgres client 
-    postgres_client = self._postgres
-    postgres_conn_uri = postgres_client.connection_factory(1, self._col,) # calling connection method to get connection string with 1 specified for the database developer privileges
-    logging.info("Upserting data into Postgres")
-    #initializing postgres client 
-    postgres_client.upsert_db(postgres_conn_uri, ti, self._inc_processed_dir, self._full_processed_dir, extract_dt)
-    
-    return
-    
-def load_wh(self):
-    pass
+    def load_wh(self):
+        pass
