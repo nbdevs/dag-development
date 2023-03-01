@@ -4,7 +4,6 @@ from airflow.utils.task_group import TaskGroup
 from airflow.operators.python import PythonOperator, BranchPythonOperator, ShortCircuitOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.models.param import Param
-from airflow.models.xcom import XCom
 
 from processor import Director, DatabaseETL, WarehouseETL
 from connections import PostgresClient, PostgresConnection
@@ -31,10 +30,15 @@ def _retrieve_extract_type(db_handler, ti):
     """This function determines the extract format of the load cycle.
     Takes two arguments, the ETL class that directs the tasks within pipeline, and a reference to a task instance for pushing results
     to the airflow metadata database."""
+
+    from decouple import config
+    
+    #path to file on linux machine 
+    pathway = config("pathway")
     
     # accessing current context of running task instance
 
-    extract_type = db_handler.determine_format()
+    extract_type = db_handler.determine_format(pathway)
     ti.xcom_push(key='extract_format', value=extract_type)
     
 
@@ -162,7 +166,7 @@ def _changed_data_detected(self, db_handler, ti):
 
 # Defining baseline arguments for DAGs
 default_args = {
-    'start_date': datetime(2023, 1, 25),
+    'start_date': datetime(2023, 2, 25),
     'schedule_interval': '@weekly',
     'catchup_by_default': False,
     'do_xcom_push': True,
@@ -181,14 +185,16 @@ with DAG(
         task_id='retrieve_extract_type',
         python_callable=_retrieve_extract_type,
         op_kwargs={"db_handler": db_handler},
-        sla=timedelta(minutes=10)
+        sla=timedelta(minutes=10),
+        do_xcom_push=False
     )
 
     determine_extract_format = BranchPythonOperator(
         task_id='determine_extract_format',
         op_kwargs={"db_handler": db_handler},
         python_callable=_determine_format,
-        sla=timedelta(minutes=5)
+        sla=timedelta(minutes=5),
+        do_xcom_push=False
     )
 
     full_extract_load = PythonOperator(
