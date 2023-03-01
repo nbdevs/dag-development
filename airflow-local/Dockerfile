@@ -10,6 +10,8 @@ ENV TERM linux
 ARG AIRFLOW_VERSION=2.4.2
 ARG AIRFLOW_USER_HOME=/usr/local/airflow
 ENV AIRFLOW_HOME=${AIRFLOW_USER_HOME}
+ENV PATH="$AIRFLOW_HOME/.local/bin:$PATH"
+ENV PATH="$AIRFLOW_HOME/.local/lib/python3.9/site-packages:$PATH"
 
 # Define en_US.
 ENV LANGUAGE en_US.UTF-8
@@ -79,8 +81,6 @@ RUN chmod +x /entrypoint.sh
 
 # switch to airflow user to bypass permissions in container 
 USER airflow
-ENV PYTHONPATH = "${PYTHONPATH}:${AIRFLOW_HOME}"
-ENV PYTHONPATH = "${PYTHONPATH}:$AIRFLOW_HOME/.local/lib/python3.9/site-packages"
 
 # creating set up tools and wheels to create custom python packages
 # upgrade pip and install dependnencies needed to build pscyopg2 module 
