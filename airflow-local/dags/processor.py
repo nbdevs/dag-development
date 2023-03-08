@@ -744,12 +744,12 @@ class Director:
             logging.info("Extracting Aggregated Season Data...")
             season_table = self._db_builder.extract_season_grain(self._fl_season_dir, self._start_date, self._end_date)
             logging.info("Extracting Aggregated Qualifying Data.")
-            qualifying_table = self._db_builder.extract_qualifying_grain(self.fl_results_dir, self._start_date, self._end_date)
+            qualifying_table = self._db_builder.extract_qualifying_grain(self._fl_results_dir, self._start_date, self._end_date)
             logging.info("Extracting Aggregated Results Data...")
-            results_table = self._db_builder.extract_race_grain(self.fl_race_dir, self._start_date, self._end_date)
+            results_table = self._db_builder.extract_race_grain(self._fl_race_dir, self._start_date, self._end_date)
             logging.info("Extracting Aggregated Telemetry Data...")
-            race_telem_table = self._db_builder.extract_race_telemetry(self.fl_telem_dir, self._start_date, self._end_date)
-            quali_telem_table = self._db_builder.extract_quali_telemetry(self.fl_telem_dir, self._start_date, self._end_date)
+            race_telem_table = self._db_builder.extract_race_telemetry(self._fl_telem_dir, self._start_date, self._end_date)
+            quali_telem_table = self._db_builder.extract_quali_telemetry(self._fl_telem_dir, self._start_date, self._end_date)
             logging.info("Serializing pandas Tables into CSV...")
             extract_dt = self._builder.serialize_full(results_table, qualifying_table, season_table, race_telem_table, quali_telem_table)
             logging.info("Upserting data into Postgres ")
@@ -765,12 +765,12 @@ class Director:
             
             logging.info("-----------------------------------Data extraction, cleaning and conforming-----------------------------------------")
             logging.info("Extracting Aggregated Qualifying Data.")
-            qualifying_table = self._db_builder.incremental_qualifying(self.fl_qualifying_dir, self._start_date, self._end_date)
+            qualifying_table = self._db_builder.incremental_qualifying(self._inc_qualifying, self._start_date, self._end_date)
             logging.info("Extracting Aggregated Results Data...")
-            results_table = self._db_builder.incremental_results(self.fl_results_dir, self._start_date, self._end_date)
+            results_table = self._db_builder.incremental_results(self._inc_results, self._start_date, self._end_date)
             logging.info("Extracting aggregated Telemetry data... ")
-            quali_telem_table = self._db_builder.incremental_quali_telem(self.inc_qualitelem, self._start_date, self._end_date)
-            race_telem_table = self._db_builder.incremental_race_telem(self.inc_racetelem, self._start_date, self._end_date)
+            quali_telem_table = self._db_builder.incremental_quali_telem(self._inc_qualitelem, self._start_date, self._end_date)
+            race_telem_table = self._db_builder.incremental_race_telem(self._inc_racetelem, self._start_date, self._end_date)
             
             return results_table, qualifying_table, race_telem_table, quali_telem_table
 
