@@ -40,7 +40,6 @@ def _retrieve_extract_type(db_handler, ti):
 
     extract_type = db_handler.determine_format(pathway)
     ti.xcom_push(key='extract_format', value=extract_type)
-    
 
 def _determine_format(ti) -> str:
     """This function determines the branch pathway to follow, determined by the retrieved xcoms 
@@ -85,7 +84,6 @@ def _load_db(db_director, ti):
         
 
 # detecting new data
-
 def _changed_data_capture(client, pg_conn, ti, db_handler):
     """This class is responsible for determining if there has been any changed data detected between new loaded data
     and that currently in the database tables. Takes two arguments, first being a reference to the postgres client class, and second being a reference to the postgres connection class."""
@@ -166,7 +164,7 @@ def _changed_data_detected(self, db_handler, ti):
 
 # Defining baseline arguments for DAGs
 default_args = {
-    'start_date': datetime(2023, 2, 25),
+    'start_date': datetime(2023, 3, 4),
     'schedule_interval': '@weekly',
     'catchup_by_default': False,
     'do_xcom_push': True,
@@ -179,7 +177,8 @@ default_args = {
 with DAG(
         dag_id='database_etl',
         default_args=default_args,
-        render_template_as_native_obj=True) as db_etl:
+        render_template_as_native_obj=True,
+        dagrun_timeout=timedelta(minutes=120)) as db_etl:
     
     retrieve_extract_type = PythonOperator(
         task_id='retrieve_extract_type',
