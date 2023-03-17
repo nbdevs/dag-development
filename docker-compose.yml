@@ -10,6 +10,7 @@ x-airflow-common:
     AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
     AIRFLOW__CORE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
     AIRFLOW__local__RESULT_BACKEND: ${AIRFLOW__local__RESULT_BACKEND}
+    AIRFLOW__CELERY__RESULT_BACKEND: ${AIRFLOW__CELERY__RESULT_BACKEND}
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
@@ -21,6 +22,7 @@ x-airflow-common:
   volumes:
     - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
     - ./airflow-local/logs:/usr/local/airflow/logs:rw
+    - ./airflow-local/dags:/usr/local/airflow/dags:rw
     - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
   depends_on:
     &airflow-common-depends-on
@@ -116,9 +118,21 @@ services:
      - ./pgbouncer/pgbouncer.log:/var/log/pgbouncer.log:rw
      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:rw
 
+  rabbitmq:
+    build: rabbitmq
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_CONFIG_FILE: ${RABBITMQ_CONFIG_FILE}
+      RABBITMQ_PID_FILE: ${RABBITMQ_PID_FILE}
+      RABBITSERVER_ADDITIONAL_ERL_ARGS: -rabbit log [{console,[{level, debug}]}]
+      RABBITMQ_HOSTNAME: ${RABBITMQ_HOST}
+    ports:
+      - ${RABBITMQ_MANAGEMENT_PORT}:${RABBITMQ_MANAGEMENT_PORT}
+      - ${RABBITMQ_PORT}:${RABBITMQ_PORT} 
+ 
   airflow-webserver:
     <<: *airflow-common
-    command: webserver
     ports:
       - ${AIRFLOW_PORT}:${AIRFLOW_PORT}
     healthcheck:
@@ -130,18 +144,11 @@ services:
     volumes:
       - ./airflow-local/logs:/usr/local/airflow/logs:rw
       - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
-    
-    extra_hosts:
-      - "airflow-worker1:192.168.0.49"
-      - "airflow-worker2:192.168.0.49"
-      - "airflow-worker3:192.168.0.49"
-      - "airflow-worker4:192.168.0.49"
     depends_on:
       <<: *airflow-common-depends-on
 
   airflow-scheduler:
     <<: *airflow-common
-    command: scheduler
     healthcheck:
       test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname pgbouncer']
       interval: 10s
@@ -151,6 +158,63 @@ services:
     volumes:
       - ./airflow-local/logs:/usr/local/airflow/logs:rw
       - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
+    depends_on:
+      <<: *airflow-common-depends-on
+
+  airflow-worker1:
+    <<: *airflow-common
+    restart: on-failure
+
+    depends_on:
+          <<: *airflow-common-depends-on
+    volumes:
+      - ./airflow-local/logs:/usr/local/airflow/logs:rw
+      - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
+      - ./airflow-local/dags:/usr/local/airflow/dags:rw
+      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/config/airflow.cfg:rw
+  airflow-worker2:
+    <<: *airflow-common
+    restart: on-failure
+
+    depends_on:
+          <<: *airflow-common-depends-on
+    volumes:
+      - ./airflow-local/logs:/usr/local/airflow/logs:rw
+      - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
+      - ./airflow-local/dags:/usr/local/airflow/dags:rw
+      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/config/airflow.cfg:rw
+  
+  airflow-worker3:
+    <<: *airflow-common
+    restart: on-failure
+
+    depends_on:
+          <<: *airflow-common-depends-on
+    volumes:
+      - ./airflow-local/logs:/usr/local/airflow/logs:rw
+      - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
+      - ./airflow-local/dags:/usr/local/airflow/dags:rw
+      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/config/airflow.cfg:rw
+  airflow-worker4:
+    <<: *airflow-common
+    restart: on-failure
+    depends_on:
+          <<: *airflow-common-depends-on
+    volumes:
+      - ./airflow-local/logs:/usr/local/airflow/logs:rw
+      - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
+      - ./airflow-local/dags:/usr/local/airflow/dags:rw
+      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/config/airflow.cfg:rw
+  flower:
+    <<: *airflow-common
+    ports:
+      - 5555:5555
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
     depends_on:
       <<: *airflow-common-depends-on
 
