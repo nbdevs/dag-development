@@ -1,4 +1,4 @@
-FROM python:3.9-slim-buster
+FROM python:3.9-slim-buster AS airflow-setup
 
 # adapted from label maintainer mac lamberti https://github.com/marclamberti/airflow-prod/blob/master/Dockerfile
 
@@ -49,6 +49,8 @@ RUN set -ex \
         curl \
         rsync \
         netcat \
+        erlang \
+        rabbitmq-server \
         locales \
     && sed -i 's/^# en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/g' /etc/locale.gen \
     && locale-gen \
@@ -84,13 +86,13 @@ USER airflow
 
 # creating set up tools and wheels to create custom python packages
 # upgrade pip and install dependnencies needed to build pscyopg2 module 
-RUN pip3.9 install --upgrade pip
-RUN pip3.9 install setuptools wheel psycopg2 python-decouple fastf1
+RUN pip3.9 install --no-cache-dir --upgrade pip
+RUN pip3.9 install --no-cache-dir setuptools wheel psycopg2 python-decouple fastf1
 #install from requiremnts.txt to reduce the startup time for airflow scheduler, and install local packages to airflow image
-RUN pip3.9 install 'apache-airflow[postgres,celery,amazon,hive,kubernetes,ftp,http,sftp,jdbc,snowflake,ssh,sqlite,imap,s3]'==${AIRFLOW_VERSION} --constraint ${AIRFLOW_USER_HOME}/requirements-py3.9.txt 
+RUN pip3.9 install --no-cache-dir 'apache-airflow[postgres,celery,amazon,hive,kubernetes,ftp,http,sftp,jdbc,snowflake,ssh,sqlite,imap,s3,rabbitmq]'==${AIRFLOW_VERSION} --constraint ${AIRFLOW_USER_HOME}/requirements-py3.9.txt 
 
 WORKDIR ${AIRFLOW_USER_HOME}
 
 EXPOSE 8080 8793
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["webserver"]
+CMD ["webserver", "scheduler", "worker", "flower"]
