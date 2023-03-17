@@ -5,8 +5,8 @@ TRY_LOOP="3"
 
 # Global defaults and back-compat
 : "${AIRFLOW_HOME:="/usr/local/airflow"}"
-: "${AIRFLOW__CORE__FERNET_KEY:=${AIRFLOW_FERNET_KEY}}"
-: "${AIRFLOW__CORE__EXECUTOR:=${EXECUTOR:-Local}Executor}"
+: "${AIRFLOW__CORE__FERNET_KEY:="$AIRFLOW_FERNET_KEY"}"
+: "${AIRFLOW__CORE__EXECUTOR:="$AIRFLOW_EXECUTOR"}"
 
 export \
   AIRFLOW_HOME \
@@ -32,11 +32,11 @@ if [ "$AIRFLOW__CORE__EXECUTOR" != "SequentialExecutor" ]; then
   # Check if the user has provided explicit Airflow configuration concerning the database
   if [ -z "$AIRFLOW__CORE__SQL_ALCHEMY_CONN" ]; then
     # Default values corresponding to the default compose files
-    : "${POSTGRES_HOST:="postgres"}"
-    : "${POSTGRES_PORT:="5432"}"
-    : "${POSTGRES_USER:="airflow"}"
-    : "${POSTGRES_PASSWORD:="airflow"}"
-    : "${POSTGRES_DB:="airflow"}"
+    : "${POSTGRES_HOST:="$PG_MAS_HOST"}"
+    : "${POSTGRES_PORT:="$PG_BOUNCER_PORT"}"
+    : "${POSTGRES_USER:="$AIRFLOW_USER"}"
+    : "${POSTGRES_PASSWORD:="$AIRFLOW_PASSWORD"}"
+    : "${POSTGRES_DB:="$POSTGRES_DB"}"
     : "${POSTGRES_EXTRAS:-""}"
 
     AIRFLOW__CORE__SQL_ALCHEMY_CONN="postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}${POSTGRES_EXTRAS}"
@@ -44,7 +44,7 @@ if [ "$AIRFLOW__CORE__EXECUTOR" != "SequentialExecutor" ]; then
 
     # Check if the user has provided explicit Airflow configuration for the broker's connection to the database
     if [ "$AIRFLOW__CORE__EXECUTOR" = "CeleryExecutor" ]; then
-      AIRFLOW__CELERY__RESULT_BACKEND="db+postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}${POSTGRES_EXTRAS}"
+      AIRFLOW__CELERY__RESULT_BACKEND="db+postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PG_MAS_HOST}:${PG_BOUNCER_PORT}/${POSTGRES_DB}/${POSTGRES_USER}"
       export AIRFLOW__CELERY__RESULT_BACKEND
     fi
   else
@@ -59,37 +59,32 @@ if [ "$AIRFLOW__CORE__EXECUTOR" != "SequentialExecutor" ]; then
     POSTGRES_PORT=$(echo -n "$POSTGRES_ENDPOINT" | cut -d ':' -f2)
   fi
 
-  wait_for_port "Postgres" "$POSTGRES_HOST" "$POSTGRES_PORT"
+  wait_for_port "postgres" "$POSTGRES_HOST" "$POSTGRES_PORT"
 fi
 
-# CeleryExecutor drives the need for a Celery broker, here Redis is used
+# CeleryExecutor drives the need for a Celery broker, here RabbitMQ is used
 if [ "$AIRFLOW__CORE__EXECUTOR" = "CeleryExecutor" ]; then
-  # Check if the user has provided explicit Airflow configuration concerning the broker
+  # Check for explicit Airflow configuration concerning the broker
   if [ -z "$AIRFLOW__CELERY__BROKER_URL" ]; then
     # Default values corresponding to the default compose files
-    : "${REDIS_PROTO:="redis://"}"
-    : "${REDIS_HOST:="redis"}"
-    : "${REDIS_PORT:="6379"}"
-    : "${REDIS_PASSWORD:=""}"
-    : "${REDIS_DBNUM:="1"}"
+    : "${RABBITMQ_PROTO:="amqp://"}"
+    : "${RABBITMQ_HOST:="$RABBITMQ_HOST"}"
+    : "${RABBITMQ_PORT:="$RABBITMQ_PORT"}"
+    : "${RABBITMQ_USER:="$RABBITMQ_USER"}"
+    : "${RABBITMQ_PASSWORD:="$RABBITMQ_PASSWORD"}"
+    : "${RABBITMQ_VIRTUALHOST:="$RABBITMQ_VIRTUAL"}"
 
-    # When Redis is secured by basic auth, it does not handle the username part of basic auth, only a token
-    if [ -n "$REDIS_PASSWORD" ]; then
-      REDIS_PREFIX=":${REDIS_PASSWORD}@"
-    else
-      REDIS_PREFIX=
-    fi
-
-    AIRFLOW__CELERY__BROKER_URL="${REDIS_PROTO}${REDIS_PREFIX}${REDIS_HOST}:${REDIS_PORT}/${REDIS_DBNUM}"
+    AIRFLOW__CELERY__BROKER_URL="${RABBITMQ_PROTO}${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/${RABBITMQ_VIRTUAL}"
     export AIRFLOW__CELERY__BROKER_URL
   else
     # Derive useful variables from the AIRFLOW__ variables provided explicitly by the user
-    REDIS_ENDPOINT=$(echo -n "$AIRFLOW__CELERY__BROKER_URL" | cut -d '/' -f3 | sed -e 's,.*@,,')
-    REDIS_HOST=$(echo -n "$POSTGRES_ENDPOINT" | cut -d ':' -f1)
-    REDIS_PORT=$(echo -n "$POSTGRES_ENDPOINT" | cut -d ':' -f2)
+    RABBITMQ_ENDPOINT=$(echo -n "$AIRFLOW__CELERY__BROKER_URL" | cut -d '/' -f3 | sed -e 's,.*@,,')
+    RABBITMQ_HOST=$(echo -n "$RABBITMQ_HOST" | cut -d ':' -f1)
+    RABBITMQ_PORT=$(echo -n "$RABBITMQ_PORT" | cut -d ':' -f2)
   fi
 
-  wait_for_port "Redis" "$REDIS_HOST" "$REDIS_PORT"
+  wait_for_port "rabbitmq" "$RABBITMQ_HOST" "$RABBITMQ_PORT"
+
 fi
 
 case "$1" in
@@ -98,7 +93,7 @@ case "$1" in
     airflow db init
     airflow db upgrade 
     airflow users create \
-      --role Admin --username admin --password admin \
+      --role Admin --username $_AIRFLOW_WWW_USER_USERNAME --password $_AIRFLOW_WWW_USER_PASSWORD \
       --firstname air --lastname admin \
       --email $_AIRFLOW_WWW_USER_EMAIL
 
@@ -121,7 +116,7 @@ case "$1" in
     exec airflow "$@"
     ;;
   *)
-    # The command is something like bash, not an airflow subcommand. Just run it in the right environment.
+    # substitute the correct values
     exec "$@"
     ;;
 esac
