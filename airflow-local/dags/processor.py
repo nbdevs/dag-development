@@ -35,19 +35,19 @@ class Processor(ABC):
         pass
 
     @abstractmethod
-    def incremental_qualifying(self, cache_dir) -> pd.DataFrame:
+    def incremental_qualifying(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         pass
     
     @abstractmethod
-    def incremental_results(self, cache_dir) -> pd.DataFrame:
+    def incremental_results(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         pass
     
     @abstractmethod
-    def incremental_quali_telem(self, cache_dir) -> pd.DataFrame:
+    def incremental_quali_telem(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         pass
     
     @abstractmethod
-    def incremental_race_telem(self, cache_dir) -> pd.DataFrame:
+    def incremental_race_telem(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         pass
     
     @abstractmethod
@@ -365,7 +365,7 @@ class DatabaseETL(Processor):
                 
         return extract_dt # return the date to push to xcoms for s3 hook to identify the file by the date for uploading into postgres 
        
-    def incremental_qualifying(self):
+    def incremental_qualifying(self, cache_dir, start_date, end_date):
         """This function handles the incremental extraction of qualifying data into the database"""
         
         import logging
@@ -379,7 +379,7 @@ class DatabaseETL(Processor):
         
         pass
     
-    def incremental_results(self):
+    def incremental_results(self, cache_dir, start_date, end_date):
         """This function handles the incremental loading of race result data into the database"""
         
         import logging
@@ -405,7 +405,7 @@ class DatabaseETL(Processor):
         
         pass
     
-    def incremental_race_telem(self):
+    def incremental_race_telem(self, cache_dir, start_date, end_date):
         import logging
         import os
         from datetime import datetime 
@@ -668,16 +668,16 @@ class WarehouseETL(Processor):
     def extract_race_grain(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         pass
 
-    def incremental_qualifying(self, cache_dir) -> pd.DataFrame:
+    def incremental_qualifying(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         pass
     
-    def incremental_results(self, cache_dir) -> pd.DataFrame:
+    def incremental_results(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         pass
     
-    def incremental_quali_telem(self) -> pd.DataFrame:
+    def incremental_quali_telem(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         pass
     
-    def incremental_race_telem(self) -> pd.DataFrame:
+    def incremental_race_telem(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         pass
     
     def serialize_full(self, race_table, driver_table, season_table, race_telem_table, quali_telem_table)-> datetime:
