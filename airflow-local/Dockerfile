@@ -93,6 +93,6 @@ RUN pip3.9 install --no-cache-dir 'apache-airflow[postgres,celery,amazon,hive,ku
 
 WORKDIR ${AIRFLOW_USER_HOME}
 
-EXPOSE 8080 8793
+EXPOSE 8080 8793 5555
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["webserver", "scheduler", "worker", "flower"]
+CMD ["webserver", "scheduler", "celery worker", "celery flower"]
