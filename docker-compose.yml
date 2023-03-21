@@ -133,6 +133,7 @@ services:
  
   airflow-webserver:
     <<: *airflow-common
+    command: webserver
     ports:
       - ${AIRFLOW_PORT}:${AIRFLOW_PORT}
     healthcheck:
@@ -149,6 +150,7 @@ services:
 
   airflow-scheduler:
     <<: *airflow-common
+    command: scheduler
     healthcheck:
       test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname pgbouncer']
       interval: 10s
@@ -184,31 +186,10 @@ services:
       - ./airflow-local/dags:/usr/local/airflow/dags:rw
       - ./airflow-local/config/airflow.cfg:/usr/local/airflow/config/airflow.cfg:rw
   
-  airflow-worker3:
-    <<: *airflow-common
-    restart: on-failure
-
-    depends_on:
-          <<: *airflow-common-depends-on
-    volumes:
-      - ./airflow-local/logs:/usr/local/airflow/logs:rw
-      - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
-      - ./airflow-local/dags:/usr/local/airflow/dags:rw
-      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/config/airflow.cfg:rw
-  airflow-worker4:
-    <<: *airflow-common
-    restart: on-failure
-    depends_on:
-          <<: *airflow-common-depends-on
-    volumes:
-      - ./airflow-local/logs:/usr/local/airflow/logs:rw
-      - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
-      - ./airflow-local/dags:/usr/local/airflow/dags:rw
-      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/config/airflow.cfg:rw
   flower:
     <<: *airflow-common
     ports:
-      - 5555:5555
+      - ${FLOWER_PORT}:${FLOWER_PORT}
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
       interval: 10s
