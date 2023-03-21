@@ -120,6 +120,7 @@ services:
 
   rabbitmq:
     build: rabbitmq
+    restart: always
     env_file:
       - .env
     environment:
@@ -141,7 +142,7 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
-    restart: on-failure
+    restart: always
     volumes:
       - ./airflow-local/logs:/usr/local/airflow/logs:rw
       - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
@@ -156,7 +157,7 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
-    restart: on-failure
+    restart: always
     volumes:
       - ./airflow-local/logs:/usr/local/airflow/logs:rw
       - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
@@ -165,7 +166,7 @@ services:
 
   airflow-worker1:
     <<: *airflow-common
-    restart: on-failure
+    restart: always
 
     depends_on:
           <<: *airflow-common-depends-on
@@ -174,18 +175,6 @@ services:
       - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
       - ./airflow-local/dags:/usr/local/airflow/dags:rw
       - ./airflow-local/config/airflow.cfg:/usr/local/airflow/config/airflow.cfg:rw
-  airflow-worker2:
-    <<: *airflow-common
-    restart: on-failure
-
-    depends_on:
-          <<: *airflow-common-depends-on
-    volumes:
-      - ./airflow-local/logs:/usr/local/airflow/logs:rw
-      - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
-      - ./airflow-local/dags:/usr/local/airflow/dags:rw
-      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/config/airflow.cfg:rw
-  
   flower:
     <<: *airflow-common
     ports:
