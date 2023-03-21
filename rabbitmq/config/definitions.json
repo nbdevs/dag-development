@@ -1,0 +1,71 @@
+{
+    "users": [
+        {
+        "name" : "rabbit_adman",
+        "password" : "admin",
+        "tags" : "administrator"
+        }
+    ],
+    "vhosts": [
+        {
+            "name" : "/"
+        }
+    ],
+    "permissions":[
+        {
+            "user": "rabbit_adman",
+            "vhost" : "/",
+            "configure" : ".*",
+            "write":".*",
+            "read": ".*"
+        }
+    ],
+    "parameters" : [],
+    "policies" : [],
+    "exchanges" : [
+        {
+            "name" : "rabbit.exchange",
+            "vhost" : "/",
+            "type" : "fanout",
+            "durable": true,
+            "auto_delete" : false,
+            "internal": false,
+            "arguments" : {}
+        }
+    ],
+    "queues": [
+        {
+            "name" : "rabbit.db",
+            "vhost" : "/",
+            "durable" : true,
+            "auto_delete" : false,
+            "arguments": {}
+        },
+        {
+            "name" : "rabbit.dw",
+            "vhost" : "/",
+            "durable" : true,
+            "auto_delete" : false,
+            "arguments": {}
+        }
+    ],
+    "bindings" : [
+        {
+            "source" : "rabbit.exchange",
+            "vhost" : "/",
+            "destination": "rabbit.db",
+            "destination_type" : "queue",
+            "routing_key" : "rabbit.db.#",
+            "arguments": {}
+        },
+        {
+            "source" : "rabbit.exchange",
+            "vhost" : "/",
+            "destination": "rabbit.dw",
+            "destination_type" : "queue",
+            "routing_key" : "rabbit.dw.#",
+            "arguments": {}
+        }
+    ]
+
+}
