@@ -10,7 +10,9 @@ x-airflow-common:
     AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
     AIRFLOW__CORE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
     AIRFLOW__local__RESULT_BACKEND: ${AIRFLOW__local__RESULT_BACKEND}
+    AIRFLOW__CELERY__CELERY_APP_NAME: ${AIRFLOW__CELERY__CELERY_APP_NAME}
     AIRFLOW__CELERY__RESULT_BACKEND: ${AIRFLOW__CELERY__RESULT_BACKEND}
+    AIRFLOW__CELERY__CELERY_BROKER_URL: ${AIRFLOW__CELERY__BROKER_URL}
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
@@ -28,6 +30,9 @@ x-airflow-common:
     &airflow-common-depends-on
     postgresmaster:
       condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+ 
 
 services:
   readreplica:
@@ -130,7 +135,14 @@ services:
       RABBITMQ_HOSTNAME: ${RABBITMQ_HOST}
     ports:
       - ${RABBITMQ_MANAGEMENT_PORT}:${RABBITMQ_MANAGEMENT_PORT}
-      - ${RABBITMQ_PORT}:${RABBITMQ_PORT} 
+      - ${RABBITMQ_PORT}:${RABBITMQ_PORT}
+    healthcheck:
+      test: rabbitmq-diagnostics -q check_running
+      interval: 15s
+      timeout: 15s
+      retries: 5
+      start_period: 30s
+
  
   airflow-webserver:
     <<: *airflow-common
@@ -145,7 +157,7 @@ services:
     restart: always
     volumes:
       - ./airflow-local/logs:/usr/local/airflow/logs:rw
-      - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
+      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
     depends_on:
       <<: *airflow-common-depends-on
 
@@ -160,23 +172,26 @@ services:
     restart: always
     volumes:
       - ./airflow-local/logs:/usr/local/airflow/logs:rw
-      - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
+      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
     depends_on:
       <<: *airflow-common-depends-on
 
   airflow-worker1:
     <<: *airflow-common
+    environment: *airflow-common-env
+    command: airflow celery worker  
     restart: always
-
     depends_on:
-          <<: *airflow-common-depends-on
+      <<: *airflow-common-depends-on
     volumes:
       - ./airflow-local/logs:/usr/local/airflow/logs:rw
-      - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
       - ./airflow-local/dags:/usr/local/airflow/dags:rw
-      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/config/airflow.cfg:rw
+      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
   flower:
     <<: *airflow-common
+    environment: 
+      <<: *airflow-common-env
+    command: airflow celery flower
     ports:
       - ${FLOWER_PORT}:${FLOWER_PORT}
     healthcheck:
