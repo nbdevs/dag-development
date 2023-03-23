@@ -95,4 +95,4 @@ WORKDIR ${AIRFLOW_USER_HOME}
 
 EXPOSE 8080 8793 5555
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["webserver", "scheduler", "celery worker", "celery flower"]
+CMD ["webserver"]
