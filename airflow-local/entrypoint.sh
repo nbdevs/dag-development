@@ -74,7 +74,7 @@ if [ "$AIRFLOW__CORE__EXECUTOR" = "CeleryExecutor" ]; then
     : "${RABBITMQ_PASSWORD:="$RABBITMQ_PASSWORD"}"
     : "${RABBITMQ_VIRTUALHOST:="$RABBITMQ_VIRTUAL"}"
 
-    AIRFLOW__CELERY__BROKER_URL="${RABBITMQ_PROTO}${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@${RABBITMQ_HOST}:${RABBITMQ_PORT}${RABBITMQ_VIRTUAL}"
+    AIRFLOW__CELERY__BROKER_URL="${RABBITMQ_PROTO}${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/${RABBITMQ_VIRTUAL}"
     export AIRFLOW__CELERY__BROKER_URL
   else
     # Derive useful variables from the AIRFLOW__ variables provided explicitly by the user
@@ -93,16 +93,10 @@ case "$1" in
     airflow db init
     airflow db upgrade 
 
-    # This script needs to be executed just once
-    if [ -f /$0.completed ] ; then
-      echo "$0 `date` /$0.completed found, will now skip user creation..."
-      exit 0
-    else
-      airflow users create \
-      --role Admin --username $_AIRFLOW_WWW_USER_USERNAME --password $_AIRFLOW_WWW_USER_PASSWORD \
-      --firstname air --lastname admin \
-      --email $_AIRFLOW_WWW_USER_EMAIL
-    fi
+    airflow users create \
+    --role Admin --username $_AIRFLOW_WWW_USER_USERNAME --password $_AIRFLOW_WWW_USER_PASSWORD \
+    --firstname air --lastname admin \
+    --email $_AIRFLOW_WWW_USER_EMAIL
 
     if [ "$AIRFLOW__CORE__EXECUTOR" = "LocalExecutor" ] || [ "$AIRFLOW__CORE__EXECUTOR" = "SequentialExecutor" ]; then
       # With the "Local" and "Sequential" executors it should all run in one container.
@@ -110,7 +104,7 @@ case "$1" in
     fi
     exec airflow webserver
     ;;
-  worker|scheduler)
+  scheduler | worker)
     # Give the webserver time to run initdb.
     sleep 30
     exec airflow "$@"
