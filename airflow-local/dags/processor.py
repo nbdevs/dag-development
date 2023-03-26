@@ -51,7 +51,7 @@ class Processor(ABC):
         pass
     
     @abstractmethod
-    def serialize_full(self, race_table, driver_table, season_table, race_telem_table, quali_telem_table)-> datetime:
+    def serialize_full(self, user_home, race_table, driver_table, season_table, race_telem_table, quali_telem_table)-> datetime:
         pass
     
     @abstractmethod
@@ -109,8 +109,7 @@ class DatabaseETL(Processor):
         import os
 
         return bool(s and s.isspace() or os.stat(pathway).st_size==0)  
-
-                
+    
     def determine_format(self, pathway) -> str:
         """Function which determines if incremental or full load is necessary."""
  
@@ -326,7 +325,7 @@ class DatabaseETL(Processor):
                 
         return season_table
     
-    def serialize_full(self, race_table, driver_table, season_table, race_telem_table, quali_telem_table):
+    def serialize_full(self, user_home, race_table, driver_table, season_table, race_telem_table, quali_telem_table):
         """ This method is responsible for serializing the files into csv format before they are uploaded in raw form to an s3 bucket for persistence."""
         import os 
         import logging
@@ -339,7 +338,7 @@ class DatabaseETL(Processor):
         extract_dt = datetime.today().strftime("%Y-%m-%d")
 
         dataframes = [race_table, driver_table, season_table, race_telem_table, quali_telem_table]
-        user_home = config("user_home")
+        
         
         i = 0 # counter variable 
         
@@ -349,19 +348,19 @@ class DatabaseETL(Processor):
             i+=1 # increment counter 
             
             if i == 1:
-                d.to_csv('Users/{}/Documents/Cache/FullProcessed/Results{}.csv'.format(user_home, extract_dt), index=False, header=True)
+                d.to_csv('{}/cache/FullProcessed/Results{}.csv'.format(user_home, extract_dt), index=False, header=True)
                 
             elif i == 2:
-                d.to_csv('Users/{}/Documents/Cache/FullProcessed/Qualifying{}.csv'.format(user_home, extract_dt), index=False, header=True)
+                d.to_csv('{}/cache/FullProcessed/Qualifying{}.csv'.format(user_home, extract_dt), index=False, header=True)
                 
             elif i == 3:
-                d.to_csv('/Users/{}/Documents/Cache/FullProcessed/Season{}.csv'.format(user_home, extract_dt), index=False, header=True)
+                d.to_csv('{}/cache/FullProcessed/Season{}.csv'.format(user_home, extract_dt), index=False, header=True)
             
             elif i == 4:
-                d.to_csv('/Users/{}/Documents/Cache/FullProcessed/RaceTelem{}.csv'.format(user_home, extract_dt), index=False, header=True)
+                d.to_csv('{}/cache/FullProcessed/RaceTelem{}.csv'.format(user_home, extract_dt), index=False, header=True)
                 
             elif i == 5:
-                d.to_csv('/Users/{}/Documents/Cache/FullProcessed/QualifyingTelem{}.csv'.format(user_home, extract_dt), index=False, header=True)
+                d.to_csv('{}/cache/FullProcessed/QualifyingTelem{}.csv'.format(user_home, extract_dt), index=False, header=True)
                 
         return extract_dt # return the date to push to xcoms for s3 hook to identify the file by the date for uploading into postgres 
        
@@ -417,7 +416,7 @@ class DatabaseETL(Processor):
         
         pass
     
-    def increment_serialize(self, qualifying_table, results_table, race_telem_table, quali_telem_table, ti):
+    def increment_serialize(self, qualifying_table, results_table, race_telem_table, quali_telem_table):
         
         import logging
         import os
@@ -439,20 +438,18 @@ class DatabaseETL(Processor):
             i+=1 # increment counter 
             
             if i == 1:
-                d.to_csv('Users/{}/Documents/Cache/IncrementalProcessed/Qualifying{}.csv'.format(user_home, extract_dt), index=False, header=True)
+                d.to_csv('Users/{}/cache/IncrementalProcessed/Qualifying{}.csv'.format(user_home, extract_dt), index=False, header=True)
                 
             elif i == 2:
-                d.to_csv('Users/{}/Documents/Cache/IncrementalProcessed/Results{}.csv'.format(user_home, extract_dt), index=False, header=True)
+                d.to_csv('Users/{}/cache/IncrementalProcessed/Results{}.csv'.format(user_home, extract_dt), index=False, header=True)
                 
             elif i == 3:
-                d.to_csv('/Users/{}/Documents/Cache/IncrementalProcessed/RaceTelem{}.csv'.format(user_home, extract_dt), index=False, header=True)
+                d.to_csv('/Users/{}/cache/IncrementalProcessed/RaceTelem{}.csv'.format(user_home, extract_dt), index=False, header=True)
                 
             elif i == 4:
-                d.to_csv('/Users/{}/Documents/Cache/IncrementalProcessed/QualifyingTelem{}.csv'.format(user_home, extract_dt), index=False, header=True)
+                d.to_csv('/Users/{}/cache/IncrementalProcessed/QualifyingTelem{}.csv'.format(user_home, extract_dt), index=False, header=True)
                 
-        ti.xcom_push(key='incremental_extract_dt', value=extract_dt) # return the date to push to xcoms for s3 hook to identify the file by the date for uploading into postgres 
-        
-        return
+        return extract_dt
      
     def extract_quali_telem(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         """ Full load of telemetry data for qualifying for each event of the race calendar.
@@ -680,7 +677,7 @@ class WarehouseETL(Processor):
     def incremental_race_telem(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         pass
     
-    def serialize_full(self, race_table, driver_table, season_table, race_telem_table, quali_telem_table)-> datetime:
+    def serialize_full(self, user_home, race_table, driver_table, season_table, race_telem_table, quali_telem_table)-> datetime:
         pass
     
     def increment_serialize(self, qualifying_table, results_table, race_telem_table, quali_telem_table, ti)-> datetime:
@@ -730,50 +727,13 @@ class Director:
         self._inc_racetelem = config("inc_racetelem") # env variable for directory to store cache for incremental race telemetry
         self._full_processed_dir= config("full_processed_dir") # stores the csv files for full load
         self._inc_processed_dir= config("inc_processed_dir") # stores the csv files for incremental load 
-
+    
     def load_db(self, ti, decision) -> None:
         """ Helper function which coordinates the extract and cleaning processes involved in a full and incremental load.
             Which process is implemented depends on the decision variable of either 1 or 2."""
         
-        import logging
-        
-        # Calling methods to create pandas dataframes for full load - season wide
-        if decision == 1:
-
-            logging.info("-----------------------------------Data extraction, cleaning and conforming-----------------------------------------")
-            logging.info("Extracting Aggregated Season Data...")
-            season_table = self._db_builder.extract_season_grain(self._fl_season_dir, self._start_date, self._end_date)
-            logging.info("Extracting Aggregated Qualifying Data.")
-            qualifying_table = self._db_builder.extract_qualifying_grain(self._fl_results_dir, self._start_date, self._end_date)
-            logging.info("Extracting Aggregated Results Data...")
-            results_table = self._db_builder.extract_race_grain(self._fl_race_dir, self._start_date, self._end_date)
-            logging.info("Extracting Aggregated Telemetry Data...")
-            race_telem_table = self._db_builder.extract_race_telemetry(self._fl_telem_dir, self._start_date, self._end_date)
-            quali_telem_table = self._db_builder.extract_quali_telemetry(self._fl_telem_dir, self._start_date, self._end_date)
-            logging.info("Serializing pandas Tables into CSV...")
-            extract_dt = self._builder.serialize_full(results_table, qualifying_table, season_table, race_telem_table, quali_telem_table)
-            logging.info("Upserting data into Postgres ")
-            #initializing postgres client 
-            postgres_client = self._postgres
-            postgres_conn_uri = postgres_client.connection_factory(1, self._col,) # calling connection method to get connection string with 1 specified for the database developer privileges
-            postgres_client.upsert_db(postgres_conn_uri, ti, self._inc_processed_dir, self._full_processed_dir, extract_dt)
-            
-            return
-
-        # method to call to create pandas dataframes for incremental load - race by race
-        elif decision == 2:
-            
-            logging.info("-----------------------------------Data extraction, cleaning and conforming-----------------------------------------")
-            logging.info("Extracting Aggregated Qualifying Data.")
-            qualifying_table = self._db_builder.incremental_qualifying(self._inc_qualifying, self._start_date, self._end_date)
-            logging.info("Extracting Aggregated Results Data...")
-            results_table = self._db_builder.incremental_results(self._inc_results, self._start_date, self._end_date)
-            logging.info("Extracting aggregated Telemetry data... ")
-            quali_telem_table = self._db_builder.incremental_quali_telem(self._inc_qualitelem, self._start_date, self._end_date)
-            race_telem_table = self._db_builder.incremental_race_telem(self._inc_racetelem, self._start_date, self._end_date)
-            
-            return results_table, qualifying_table, race_telem_table, quali_telem_table
-
+        return
+    
     def change_data_detected(self, ti, qualifying_table, results_table, race_telem_table, quali_telem_table, extract_dt):
         """ This function follows on from the incremental pathway of the load_db function, after new change data is detected which needs to be reflected in the database.
         If changed data has been detected and the dag run has not been short circuited by the operator then this 
