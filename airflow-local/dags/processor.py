@@ -5,7 +5,6 @@ from connections import PostgresClient, SnowflakeClient, S3Client
 from colours import Colours
 
 # --------------------------------------------------------------------------------------------------
-
 class Processor(ABC):
     """ Processor interface which creating different forms of data tables representing formula 1 data for the 3 different grains 
     in the system, aggregates them accordingly and passes the result to airflow to store in x-coms.
@@ -89,7 +88,6 @@ class Processor(ABC):
     @abstractmethod
     def create_championship_views(self, postgres_uri) -> None:
         pass
-
 
 class DatabaseETL(Processor):
     """Follows the implementation details provided in the interface in order to build the dataframe in the specified manner needed for the respective data grain.
@@ -535,7 +533,6 @@ class DatabaseETL(Processor):
         telem.columns = ["car_no", "lap_time", "lap_no", "s1_time", "s2_time", "s3_time", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier", "IsAccurate", "season_year", "race_name", "pole_lap", "humidity", "occur_of_rain_quali", "track_temp", "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
 
         return telem
-
     
     def extract_race_telem(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         """Full load of telemetry data for qualifying for each event of the race calendar.
@@ -638,7 +635,6 @@ class DatabaseETL(Processor):
         """ This function will create the two views of the drivers championship and the constructors championship dynamically
         through stored procedures which append the race date to the end of the view name."""
         pass
-
 class WarehouseETL(Processor):
     """This class handles the ETL process for the Data Warehouse in the specified manner needed for the respective data grain.
     Class for ETL from AWS S3 files into s3 stage in Snowflake."""
@@ -696,61 +692,4 @@ class WarehouseETL(Processor):
         pass
     
     def extract_race_telem(self, cache_dir) -> None:
-        pass
-
-class Director:
-    """ This class coordinates the complete ETL pipeline, from API to DW.
-    Two functions for each process to upsert into database, and to effective load the data into data stores and then call 
-    a stored procedure for the SQL (postgres, snowsql) transformations."""
-
-    import pandas as pd
-    
-    def __init__(self, startPeriod, endPeriod, col, db_processor, dw_processor) -> pd.DataFrame:
-        
-        from decouple import config
-        
-        self._db_builder = db_processor # instantiates the processor class to implement its functions 
-        self._dw_builder = dw_processor # instantiates the processor class to implement its functions 
-        self._postgres = PostgresClient() # conn string for db dev or dw dev 
-        self._snowflake = SnowflakeClient() # snowflake client connection details 
-        self._s3_storage = S3Client() # s3 client connection details
-        self._start_date = startPeriod # start period for season of formula 1 data 
-        self._end_date = endPeriod # end period for season of formula 1 data 
-        self._col = col # A colour formatting class
-        self._fl_season_dir = config("season") # env variable for directory to store cache for full load season
-        self._fl_results_dir = config("results") # env variable for directory to store cache for full load results
-        self._fl_qualifying_dir = config("qualifying") # env variable for directory to store cache for full qualifying
-        self._fl_telem_dir = config("telemetry" )# env variable for directory to store cache for full load telemetry
-        self._inc_results = config("inc_results") # env variable for directory to store cache for results
-        self._inc_qualifying = config("inc_qualifying") # env variable for directory to store cache for incremental qualifying
-        self._inc_qualitelem = config("inc_qualitelem") # env variable for directory to store cache for incremental quali telemetry
-        self._inc_racetelem = config("inc_racetelem") # env variable for directory to store cache for incremental race telemetry
-        self._full_processed_dir= config("full_processed_dir") # stores the csv files for full load
-        self._inc_processed_dir= config("inc_processed_dir") # stores the csv files for incremental load 
-    
-    def load_db(self, ti, decision) -> None:
-        """ Helper function which coordinates the extract and cleaning processes involved in a full and incremental load.
-            Which process is implemented depends on the decision variable of either 1 or 2."""
-        
-        return
-    
-    def change_data_detected(self, ti, qualifying_table, results_table, race_telem_table, quali_telem_table, extract_dt):
-        """ This function follows on from the incremental pathway of the load_db function, after new change data is detected which needs to be reflected in the database.
-        If changed data has been detected and the dag run has not been short circuited by the operator then this 
-        function serialises and pushes the new data into the database.
-        Takes a task instance object as a reference."""
-        
-        import logging 
-
-        logging.info("Creating new postgres connection...")
-        #initialising postgres client 
-        postgres_client = self._postgres
-        postgres_conn_uri = postgres_client.connection_factory(1, self._col,) # calling connection method to get connection string with 1 specified for the database developer privileges
-        logging.info("Upserting data into Postgres")
-        #initializing postgres client 
-        postgres_client.upsert_db(postgres_conn_uri, ti, self._inc_processed_dir, self._full_processed_dir, extract_dt)
-        
-        return
-        
-    def load_wh(self):
         pass
