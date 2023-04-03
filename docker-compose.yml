@@ -138,9 +138,9 @@ services:
       - ${RABBITMQ_PORT}:${RABBITMQ_PORT}
     healthcheck:
       test: rabbitmq-diagnostics -q check_running
-      interval: 15s
+      interval: 30s
       timeout: 15s
-      retries: 5
+      retries: 10
       start_period: 30s
 
  
