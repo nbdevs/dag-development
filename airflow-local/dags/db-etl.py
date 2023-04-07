@@ -64,14 +64,13 @@ with DAG(
     # incremental load task groups 
     incremental_extraction_load_race = db_director.inc_load_race(db_etl, 'incremental_ext_load_race', default_args)
     
-    incremental_extraction_load_telem = db_director.inc_load_telem(db_etl,'incremental_ext_load_telem', default_args)
+    incremental_extraction_load_telem = db_director.inc_load_telem(db_etl, 'incremental_ext_load_telem', default_args)
     
     incremental_extraction_load_pre_transf = db_director.inc_load_pre_transf(db_etl, 'incremental_ext_load_pt', default_args)
 
     change_data_capture = ShortCircuitOperator(task_id='change_data_capture',
                                                python_callable=db_director.changed_data_capture,
-                                               sla=timedelta(minutes=20),
-                                          
+                                               sla=timedelta(minutes=20)                        
     )
     
     changed_data_detected = PythonOperator(task_id='changed_data_detected',
