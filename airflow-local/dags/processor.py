@@ -390,7 +390,7 @@ class DatabaseETL(Processor):
         
         pass
     
-    def incremental_quali_telem(self):
+    def incremental_quali_telem(self, cache_dir, start_date, end_date):
         import logging
         import os
         from datetime import datetime 
