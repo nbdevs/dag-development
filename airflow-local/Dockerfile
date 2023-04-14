@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND noninteractive
 ENV TERM linux
 
 # build arguments 
-ARG AIRFLOW_VERSION=2.4.2
+ARG AIRFLOW_VERSION=2.5.2
 ARG AIRFLOW_USER_HOME=/usr/local/airflow
 ENV AIRFLOW_HOME=${AIRFLOW_USER_HOME}
 ENV PATH="$AIRFLOW_HOME/.local/bin:$PATH"
@@ -73,7 +73,7 @@ COPY --chown=airflow:root ./logs ${AIRFLOW_USER_HOME}/logs
 COPY --chown=airflow:root ./requirements-py3.9.txt ${AIRFLOW_USER_HOME}/requirements-py3.9.txt
 COPY --chown=airflow:root ./cache ${AIRFLOW_USER_HOME}/cache
 
-#setting permissions on root directories for airflow user
+#setting permissions ont root directories for airflow user
 RUN chown -R airflow:root ${AIRFLOW_USER_HOME}
 RUN chmod -R 777 ${AIRFLOW_USER_HOME}
 

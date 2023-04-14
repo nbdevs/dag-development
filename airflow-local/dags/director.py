@@ -83,9 +83,21 @@ class Director:
         extract_type = ti.xcom_pull(key='extract_format', task_ids='retrieve_extract_type')
         
         if extract_type == 'Full':
-            return 'full_extraction_load_season'
+            # path to taskgroup task
+            return 'full_ext_load_season.full_season_load'
+        
         elif extract_type == 'Incremental':
-            return 'incremental_ext_load_race'
+            
+            # string lists of tasks
+            tasks = ['incremental_qualifying_load', 'incremental_results_load']
+            task_group = []
+            size = len(tasks)
+            
+            # path to taskgroup task
+            for i in range(0, size):
+                task_group.append('incremental_ext_load_race.{}'.format(tasks[i]))
+            
+            return task_group
 
     def full_load_season(self, ti):
         """ This function generates the tabled data for the season level of granularity for F1 races.
@@ -102,7 +114,7 @@ class Director:
         season_table = self._db_builder.extract_season_grain(season_cache, self._start_date, self._end_date)
         
         # accessing current context of running task instance
-        ti.xcom_push(task_ids='full_season_load', key='season_table', value=season_table)        
+        ti.xcom_push(key='season_table', value=season_table)        
         
         return 
 
@@ -121,7 +133,7 @@ class Director:
         qualifying_table = self._db_builder.extract_qualifying_grain(qualifying_cache, self._start_date, self._end_date)
         
         # accessing current context of running task instance
-        ti.xcom_push(task_ids='full_qualifying_load', key='qualifying_table', value=qualifying_table)        
+        ti.xcom_push(key='qualifying_table', value=qualifying_table)        
         
         return 
 
@@ -140,7 +152,7 @@ class Director:
         results_table = self._db_builder.extract_results_grain(results_cache, self._start_date, self._end_date)
         
         # accessing current context of running task instance
-        ti.xcom_push(task_ids='full_results_load', key='results_table', value=results_table)        
+        ti.xcom_push(key='results_table', value=results_table)        
         
         return 
         
@@ -160,7 +172,7 @@ class Director:
         race_telem_table = self._db_builder.extract_race_telemetry(telem_cache, self._start_date, self._end_date)
 
         # accessing current context of running task instance
-        ti.xcom_push(task_ids='full_race_telem_load', key='race_telem_table', value=race_telem_table)        
+        ti.xcom_push(key='race_telem_table', value=race_telem_table)        
         
         return 
 
@@ -179,7 +191,7 @@ class Director:
         quali_telem_table = self._db_builder.extract_quali_telemetry(telem_cache, self._start_date, self._end_date)
             
         # accessing current context of running task instance 
-        ti.xcom_push(task_ids='full_quali_telem_load', key='quali_telem_table', value=quali_telem_table)        
+        ti.xcom_push(key='quali_telem_table', value=quali_telem_table)        
         
         return 
         
@@ -206,7 +218,7 @@ class Director:
         extract_dt = self._db_builder.serialize_full(processed_dir, results_table, qualifying_table, season_table, race_telem_table, quali_telem_table)
         
         # pushing value to xcoms
-        ti.xcom_push(task_id='full_load_serialization', key='extract_date', value=extract_dt)        
+        ti.xcom_push(key='extract_date', value=extract_dt)        
         
         return 
 
@@ -250,7 +262,7 @@ class Director:
         qualifying_table = self._db_builder.incremental_qualifying(qualifying_dir, self._start_date, self._end_date)
         
         # accessing current context of running task instance to push to xcoms
-        ti.xcom_push(task_ids='incremental_qualifying_load', key='qualifying_table', value=qualifying_table)     
+        ti.xcom_push(key='qualifying_table', value=qualifying_table)     
         
         return
         
@@ -268,10 +280,10 @@ class Director:
         logging.info("Extracting Aggregated Results Data...")
         
         # outputs the dataframe for the race result data to be stored in xcoms
-        results_table = self.db_builder.incremental_results(results_dir, self._start_date, self._end_date)
+        results_table = self._db_builder.incremental_results(results_dir, self._start_date, self._end_date)
         
         # accessing current context of running task instance to push to xcoms
-        ti.xcom_push(task_ids='incremental_results_load', key='results_table', value=results_table)     
+        ti.xcom_push(key='results_table', value=results_table)     
             
         return
         
@@ -292,7 +304,7 @@ class Director:
         quali_telem_table = self._db_builder.incremental_quali_telem(quali_dir, self._start_date, self._end_date)
         
         # accessing current context of running task instance to push to xcoms
-        ti.xcom_push(task_ids='incremental_quali_telem_load', key='quali_telem_table', value=quali_telem_table)     
+        ti.xcom_push(key='quali_telem_table', value=quali_telem_table)     
             
         return 
 
@@ -313,7 +325,7 @@ class Director:
         race_telem_table = self._db_builder.incremental_race_telem(race_dir, self._start_date, self._end_date)
         
         # accessing current context of running task instance to push to xcoms
-        ti.xcom_push(task_ids='incremental_race_telem_load', key='race_telem_table', value=race_telem_table)     
+        ti.xcom_push(key='race_telem_table', value=race_telem_table)     
             
         return 
 
@@ -339,7 +351,7 @@ class Director:
         extract_dt = self._db_builder.increment_serialize(processed_dir, results_table, qualifying_table, race_telem_table, quali_telem_table)
         
         # pushing value to xcoms
-        ti.xcom_push(task_id='incremental_load_serialization', key='incremental_extract_date', value=extract_dt)        
+        ti.xcom_push(key='incremental_extract_date', value=extract_dt)        
         
         return 
 
@@ -501,7 +513,8 @@ class Director:
             incremental_quali_telem = PythonOperator(task_id='incremental_quali_telem_load',
                                                             python_callable=self.inc_quali_telem,
                                                             do_xcom_push=True,
-                                                            sla=timedelta(minutes=10))                                            
+                                                            sla=timedelta(minutes=10)
+                                                        )                                            
 
             incremental_race_telem = PythonOperator(task_id='incremental_race_telem_load',
                                                             python_callable=self.inc_race_telem,
