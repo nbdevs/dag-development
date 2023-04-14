@@ -118,7 +118,7 @@ class Director:
         
         return 
 
-    def full_load_qualifying(self, db_handler, ti):
+    def full_load_qualifying(self, ti):
         """ This function generates the tabled data for the race level of granularity for F1 races.
         Takes two inputs, one being the db_handler which is a reference to the processor class, and 
         a ti argument for a reference to the task instance of the current running instance"""
@@ -149,7 +149,7 @@ class Director:
         results_cache = config("results")
         logging.info("Extracting Aggregated Results Data...")
         # outputs dataframe containing aggregated results table which will be pushed to xcom
-        results_table = self._db_builder.extract_results_grain(results_cache, self._start_date, self._end_date)
+        results_table = self._db_builder.extract_race_grain(results_cache, self._start_date, self._end_date)
         
         # accessing current context of running task instance
         ti.xcom_push(key='results_table', value=results_table)        
@@ -380,7 +380,7 @@ class Director:
             
     # extract and load new data into database
 
-    def full_load_season(self, dag, group_id, default_args):
+    def full_season_load(self, dag, group_id, default_args):
         """This function calls the extract and load function to kick off the pipeline.
         Takes three arguments, the first being the ETL orchestration class as a param, the second being the decision of full load vs incremental load, and finally a 
         reference to the task instance to push the results to the airflow metadata database."""
@@ -390,7 +390,6 @@ class Director:
         from airflow.utils.task_group import TaskGroup
         from airflow.operators.python import PythonOperator
     
-            
         logging.info("-----------------------------------Data extraction, cleaning and conforming-----------------------------------------")
             
         with TaskGroup(group_id=group_id, default_args=default_args, dag=dag) as full_load_s:
