@@ -32,7 +32,6 @@ x-airflow-common:
       condition: service_healthy
     rabbitmq:
       condition: service_healthy
- 
 
 services:
   readreplica:
@@ -62,6 +61,7 @@ services:
           - pgreplica
           - pgbouncer
           - airflow
+          
   postgresmaster:
     image: nbroj/database-images:prod-db.v5.0.0
     env_file:
@@ -143,7 +143,6 @@ services:
       retries: 10
       start_period: 30s
 
- 
   airflow-webserver:
     <<: *airflow-common
     command: webserver
@@ -187,6 +186,7 @@ services:
       - ./airflow-local/logs:/usr/local/airflow/logs:rw
       - ./airflow-local/dags:/usr/local/airflow/dags:rw
       - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
+
   flower:
     <<: *airflow-common
     environment: 
@@ -202,7 +202,7 @@ services:
     restart: always
     depends_on:
       <<: *airflow-common-depends-on
-
+      
 volumes:
   pg_data:
   pg_logs:
