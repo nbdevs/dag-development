@@ -53,7 +53,7 @@ with DAG(
     )
     
     # full load task groups 
-    full_extraction_load_season = db_director.full_load_season(db_etl, 'full_ext_load_season', default_args)
+    full_extraction_load_season = db_director.full_season_load(db_etl, 'full_ext_load_season', default_args)
     
     full_extraction_load_race = db_director.full_load_race(db_etl, 'full_ext_load_race', default_args)
     
