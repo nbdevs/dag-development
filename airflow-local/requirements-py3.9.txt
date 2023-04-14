@@ -255,7 +255,7 @@ wcwidth==0.2.5
 webencodings==0.5.1
 websocket-client==1.4.1
 websockets==10.3
-Werkzeug==2.2.2
+Werkzeug==2.2.3
 wrapt==1.14.1
 WTForms==3.0.1
 xcrun==0.4
