@@ -143,10 +143,8 @@ class DatabaseETL(Processor):
             start date and end date for extraction of f1 data as the next two. """
 
         import logging
-        import os 
         import fastf1 as f1
         import pandas as pd
-        import numpy as np 
       
         logging.info("------------------------------Extracting Aggregated Season Data--------------------------------------")
 
@@ -164,35 +162,32 @@ class DatabaseETL(Processor):
             
             season = pd.concat(data_holder)
 
-            # drop session 1,2,3, and dates, f1api support, officialeventname from season data
+        # drop session 1,2,3, and dates, f1api support, officialeventname from season data
 
-            columns = ["OfficialEventName", "Session1", "Session1Date", "Session2", "Session2Date", "Session3", "Session3Date", "F1ApiSupport", "EventFormat", "Session4", "Session5", "EventDate"]
-            for c in columns:
-                season.drop(c, axis=1, inplace=True)
+        columns = ["OfficialEventName", "Session1", "Session1Date", "Session2", "Session2Date", "Session3", "Session3Date", "F1ApiSupport", "EventFormat", "Session4", "Session5", "EventDate"]
+        for c in columns:
+            season.drop(c, axis=1, inplace=True)
 
-            #rename columns
-            #columns = {RoundNumber:race_round, Country:country, Location:city, EventName:race_name, Session4Date:quali_date, Session5Date:race_date}
-            #season.rename(columns, inplace=True, axis='columns')
-            season.columns = ["race_round", "country", "city", "race_name", "quali_date", "races_date", "season_year"]
-            season.index += 1
-            season.index.name = "race_id"
-            season.head()
+        #rename columns
+        #columns = {RoundNumber:race_round, Country:country, Location:city, EventName:race_name, Session4Date:quali_date, Session5Date:race_date}
+        #season.rename(columns, inplace=True, axis='columns')
+        season.columns = ["race_round", "country", "city", "race_name", "quali_date", "races_date", "season_year"]
+        season.index += 1
+        season.index.name = "race_id"
+    
+        #splitting the date and time apart
+        season["race_date"] = pd.to_datetime(season['races_date']).dt.date
+        season["race_time"] = pd.to_datetime(season["races_date"]).dt.time
 
-            #splitting the date and time apart
-            season["race_date"] = pd.to_datetime(season['races_date']).dt.date
-            season["race_time"] = pd.to_datetime(season["races_date"]).dt.time
-
-            season.drop("races_date", axis=1, inplace=True)
-            season_table  = season
-            
-            return season_table
+        season.drop("races_date", axis=1, inplace=True)
+        
+        return season
         
     def extract_qualifying_grain(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         """ Extracts the qualifying/driver aggregated data from the api and stores in the dataframe.
             Takes a target cache directory as the first variable
             start date and end date date for data extraction for the rest."""
         
-        import os 
         import logging 
         import fastf1 as f1 
         import pandas as pd
@@ -201,6 +196,8 @@ class DatabaseETL(Processor):
         logging.info("------------------------------Extracting Aggregated Qualifying Data--------------------------------------")
                 
         f1.Cache.enable_cache(cache_dir) #enable cache for faster data retrieval
+        ultimate = [] # empty list to store dataframe for all results across multiple seasons
+
         #outer for loop for seasons
         for s in range(start_date, end_date):
             size = f1.get_event_schedule(s)
@@ -209,6 +206,8 @@ class DatabaseETL(Processor):
             race_no = size.query("RoundNumber > 0").shape[0]
             print(race_no)
             race_name_list = [] # empty list for storing races 
+            final = [] # empty list for aggregated race data for all drivers during season
+    
             
             #get all the names of the races for this season
             for i in range(1, race_no):
@@ -250,11 +249,19 @@ class DatabaseETL(Processor):
                     #replace all empty values with NaN
                     newname.replace(r'^\s*$', np.nan, regex=True, inplace=True)
                     listd.append(newname)
-
-                drive = pd.concat(listd) #append to end of the dataframe
-                driver_table = drive
-                 
-        return driver_table
+                    
+                     # drivers in a race
+                driver_data = pd.concat(listd)
+                final.append(driver_data)
+            
+            # all races in a season
+            processed_data = pd.concat(final)
+            ultimate.append(processed_data)
+                            
+        # multiple seasons
+        quali_table = pd.concat(ultimate)
+     
+        return quali_table
         
     def extract_race_grain(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         """ Extracts race/result aggregated data and stores in pandas dataframe"""
@@ -262,9 +269,9 @@ class DatabaseETL(Processor):
         import fastf1 as f1 
         import pandas as pd
         import numpy as np
-        import os 
-
+        
         f1.Cache.enable_cache(cache_dir) # enable cache for faster data retrieval 
+        ultimate = [] # empty list to store dataframe for all results across multiple seasons
 
         #outer for loop for seasons
         for s in range(start_date, end_date):
@@ -274,6 +281,7 @@ class DatabaseETL(Processor):
             race_no = size.query("RoundNumber > 0").shape[0]
             print(race_no)
             race_name_list = [] # empty list for storing races 
+            final = [] # empty list for aggregated race data for all drivers during season
             
             #get all the names of the races for this season
             for i in range(1, race_no):
@@ -319,9 +327,20 @@ class DatabaseETL(Processor):
                     newname.replace(r'^\s*$', np.nan, regex=True, inplace=True)
                     listd.append(newname)
 
-                season_table = pd.concat(listd)
+                # drivers in a race
+                driver_data = pd.concat(listd)
+                final.append(driver_data)
+    
+            # all races in a season
+            processed_data = pd.concat(final)
+            ultimate.append(processed_data)
+                    
+        # multiple seasons
+        race_table = pd.concat(ultimate)
                 
-        return season_table
+       # f1.Cache.clear_cache(cache_dir) # clear cache to free disk space  
+ 
+        return race_table
     
     def serialize_full(self, user_home, race_table, driver_table, season_table, race_telem_table, quali_telem_table):
         """ This method is responsible for serializing the files into csv format before they are uploaded in raw form to an s3 bucket for persistence."""
@@ -337,13 +356,12 @@ class DatabaseETL(Processor):
 
         dataframes = [race_table, driver_table, season_table, race_telem_table, quali_telem_table]
         
-        
         i = 0 # counter variable 
         
         #append date to the end of the files, and output to the correct directory
         for d in dataframes:
             
-            i+=1 # increment counter 
+            i += 1 # increment counter 
             
             if i == 1:
                 d.to_csv('{}/cache/FullProcessed/Results{}.csv'.format(user_home, extract_dt), index=False, header=True)
@@ -433,7 +451,7 @@ class DatabaseETL(Processor):
         #append date to the end of the files, and output to the correct directory
         for d in dataframes:
             
-            i+=1 # increment counter 
+            i += 1 # increment counter 
             
             if i == 1:
                 d.to_csv('Users/{}/cache/IncrementalProcessed/Qualifying{}.csv'.format(user_home, extract_dt), index=False, header=True)
@@ -458,6 +476,7 @@ class DatabaseETL(Processor):
         import numpy as np
 
         f1.Cache.enable_cache(cache_dir) # enabling cache for faster data retrieval 
+        ultimate = [] # empty list to store dataframe for all results across multiple seasons
 
         #outer for loop for seasons
         for s in range(start_date, end_date):
@@ -465,7 +484,8 @@ class DatabaseETL(Processor):
             # get the number of races in the season by getting all race rounds greater than 0
             race_no = size.query("RoundNumber > 0").shape[0]
             race_name_list = [] # empty list for storing races 
-            
+            final = [] # empty list for aggregated race data for all drivers during season
+    
             #get all the names of the races for this season
             for i in range(1, race_no):
 
@@ -488,6 +508,8 @@ class DatabaseETL(Processor):
                 drivers = session.drivers #list of drivers in the session
                 listd = []
                 series = []
+                driver_list = []
+                
                 #loop through every driver in the race 
                 for d in drivers:
             
@@ -515,24 +537,33 @@ class DatabaseETL(Processor):
                     except ValueError:
                         print("No data available for car number: {}".format(d))
                         continue
+                # drivers in a race
+                drivers_data = pd.concat(driver_list)
+                final.append(drivers_data)
+            
+            # all races in a season
+            processed_data = pd.concat(final)
+            ultimate.append(processed_data)
+            
+        quali_telemetry_table = pd.concat(ultimate)    
         
         column = ["SpeedST", "IsPersonalBest", "PitOutTime", "PitInTime", "TrackStatus","LapStartTime", "LapStartDate", "Sector1SessionTime", "FreshTyre", "Time", "Sector2SessionTime", "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "DistanceToDriverAhead"]
         #drop irrelevant columns 
         for c in column:
-            telem.drop(c, axis=1, inplace=True)
+            quali_telemetry_table.drop(c, axis=1, inplace=True)
         
         #convert time deltas to strings and reformat 
         col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time", "pole_lap"]
         for c in col:
-            telem[c] = telem[c].astype(str).map(lambda x: x[10:])
+            quali_telemetry_table[c] = quali_telemetry_table[c].astype(str).map(lambda x: x[10:])
 
         #replace all empty values with NaN
-        telem.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+        quali_telemetry_table.replace(r'^\s*$', np.nan, regex=True, inplace=True)
 
         #provide desired column names 
-        telem.columns = ["car_no", "lap_time", "lap_no", "s1_time", "s2_time", "s3_time", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier", "IsAccurate", "season_year", "race_name", "pole_lap", "humidity", "occur_of_rain_quali", "track_temp", "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
+        quali_telemetry_table.columns = ["car_no", "lap_time", "lap_no", "s1_time", "s2_time", "s3_time", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier", "IsAccurate", "season_year", "race_name", "pole_lap", "humidity", "occur_of_rain_quali", "track_temp", "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
 
-        return telem
+        return quali_telemetry_table
     
     def extract_race_telem(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         """Full load of telemetry data for qualifying for each event of the race calendar.
@@ -543,6 +574,7 @@ class DatabaseETL(Processor):
         import numpy as np
 
         f1.Cache.enable_cache(cache_dir) #enabling cache for faster data retrieval 
+        ultimate = [] # empty list to store dataframe for all results across multiple seasons
 
         #outer for loop for seasons
         for s in range(start_date, end_date):
@@ -550,8 +582,9 @@ class DatabaseETL(Processor):
             # get the number of races in the season by getting all race rounds greater than 0
             race_no = size.query("RoundNumber > 0").shape[0]
             race_name_list = [] # empty list for storing races 
+            final = [] # empty list for aggregated race data for all drivers during season
             
-            #get all the names of the races for this season
+            # get all the names of the races for this season
             for i in range(1, race_no):
 
                 event = size.get_event_by_round(i)
@@ -559,10 +592,10 @@ class DatabaseETL(Processor):
                 race_name_list.append(race_name) 
                 session = f1.get_session(s, i, 'R')
                 
-                #load all driver information for session
+                # load all driver information for session
                 session.load(telemetry=True, laps=True, weather=True)
                 
-                #testing if telemtry data has been loaded
+                # testing if telemetry data has been loaded
                 try:
                     session.laps.pick_driver("HAM").get_telemetry() 
                 except Exception as exc:
@@ -581,6 +614,8 @@ class DatabaseETL(Processor):
                 drivers = session.drivers
                 listd = []
                 series = []
+                driver_list = []
+                
                 #loop through every driver in the race 
                 for d in drivers:
                     driver_t = session.laps.pick_driver(d) # load all race telemetry session for driver
@@ -607,25 +642,34 @@ class DatabaseETL(Processor):
                     except ValueError:
                         print("No data available for car number - {}".format(d))
                         continue
-                    
+                # drivers in a race
+                drivers_data = pd.concat(driver_list)
+                final.append(drivers_data)
+            
+            # all races in a season
+            processed_data = pd.concat(final)
+            ultimate.append(processed_data)
+            
+        race_telemetry_table = pd.concat(ultimate)
+                         
         column = ["TrackStatus","LapStartTime", "LapStartDate", "Sector1SessionTime", "FreshTyre", "Time", "Sector2SessionTime", "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "SpeedST"]
         #drop irrelevant columns 
         for c in column:
-            telem.drop(c, axis=1, inplace=True)
+            race_telemetry_table.drop(c, axis=1, inplace=True)
         
         #convert time deltas to strings and reformat 
         col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time", "fastest_lap"]
         for c in col:
-            telem[c] = telem[c].astype(str).map(lambda x: x[10:])
+            race_telemetry_table[c] = race_telemetry_table[c].astype(str).map(lambda x: x[10:])
 
         #replace all empty values with NaN
-        telem.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+        race_telemetry_table.replace(r'^\s*$', np.nan, regex=True, inplace=True)
 
         #provide desired column names 
-        telem.columns =["car_no", "lap_time", "lap_no", "time_out", "time_in", "s1_time", "s2_time", "s3_time", "IsPersonalBest", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier", "IsAccurate", "season_year", "race_name", "fastest_lap", "pit_duration", "humidity", "occur_of_rain_race", "track_temp",  "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
+        race_telemetry_table.columns =["car_no", "lap_time", "lap_no", "time_out", "time_in", "s1_time", "s2_time", "s3_time", "IsPersonalBest", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier", "IsAccurate", "season_year", "race_name", "fastest_lap", "pit_duration", "humidity", "occur_of_rain_race", "track_temp",  "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
 
-        telem
-
+        return race_telemetry_table
+        
     def create_table_links(self, postgres_uri):
         """ This function will create all the joining tables as an intermediary transformation step after 
         the initial tables have been constructed."""
