@@ -239,7 +239,7 @@ timple==0.1.5
 tinycss2==1.1.1
 toml==0.10.2
 tomli==2.0.1
-tornado==6.2
+tornado==6.3.2
 traitlets==5.4.0
 typing_extensions==4.4.0
 uc-micro-py==1.0.1
