@@ -9,7 +9,7 @@ Child repository which stores all of the ETL development used to aid the pipelin
 Top level data flow diagram representing the overall  architecture of the DAG ETL system.
 
 <div id="CI/CD Pipeline for local development" align="center">
-    <img src=https://github.com/nbdevs/dag-development/assets/75015699/adb27dee-0646-4403-ac9d-960caf4dd1a2 width="150" height="150"/>
+    <img src=https://github.com/nbdevs/dag-development/assets/75015699/adb27dee-0646-4403-ac9d-960caf4dd1a2 width="250" height="250"/>
 </div>
 
 A trigger event (which could be a git push, git pull, merge request of development code) activates the CI/CD pipeline via a git webhook at the repository site triggers the Jenkins multi-branch pipeline build. Jenkins is the automation tool that was used to automate CI/CD, and submodules were implemented to section off DAG code from the Dockerfile image to ensure that every change is tagged and versioned for the purpose of debugging. This process takes place within a docker container which is necessary for spinning up instances as and when required – a feature of development and testing – where the changes are screened via build and deployment tests in the Jenkinsfile which utilises the docker-cli. As shown in the diagram, if unsuccessful at any point of testing (build/deployment) then an updated commit status is sent to GitHub which indicates an error and alerts the data engineer. On the other hand, successful changes are then merged into the main branch to progress onto the goal of merging to the airflow master repository.
