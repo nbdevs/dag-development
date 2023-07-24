@@ -4,7 +4,7 @@
 
 Child repository which stores all of the ETL development used to aid the pipeline. Contains ETL pipeline which is orchestrated by airflow to deliver data from source API to database to data warehouse and finally to PowerBI for visualizations.
 
-## Summary
+## Summary of CICD Workflow
 
 Top level data flow diagram representing the overall  architecture of the DAG ETL system.
 
@@ -39,13 +39,6 @@ Since there is a requirement now for orchestration of the build process, the dir
 
 ![image](https://github.com/nbdevs/dag-development/assets/75015699/3a3610c2-1d2b-4dbd-88b7-f3fabd867aab "ETL Subsystem")
 
----
-
-## Continous Integration Continuous Deployment
-
-![image](https://github.com/nbdevs/dag-development/assets/75015699/c447aea8-65e3-46eb-b50b-5a83c5ca2445 "Local development docker infrastructure for CI")
-
-![image](https://github.com/nbdevs/dag-development/assets/75015699/79101948-52c1-48ea-bbb1-8c463a68dad6 "CI/CD Pipeline for local development.")
 
 ---
 
