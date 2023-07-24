@@ -2,6 +2,10 @@
 
 Child repository which stores all of the ETL development used to aid the pipeline. Contains ETL pipeline which is orchestrated by airflow to deliver data from source API to database to data warehouse and finally to PowerBI for visualizations.
 
+## Table of Contents
+
+### :hammer_and_wrench: Languages and Tools
+
 ## Status
 
 Ongoing development, major changes planned which will provide extra functionality for ETL into snowflake data warehouse.

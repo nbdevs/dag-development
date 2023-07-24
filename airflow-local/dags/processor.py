@@ -16,7 +16,15 @@ class Processor(ABC):
     @abstractmethod    
     def is_not_empty(self, s):
         pass
-
+    
+    @abstractmethod 
+    def extract_year(self, date_obj, dt_format):
+        pass
+    
+    @abstractmethod
+    def validate_pathway_file(self, file):
+        pass
+        
     @abstractmethod
     def determine_format(self):
         pass
@@ -98,6 +106,7 @@ class DatabaseETL(Processor):
     def __init__(self, col) -> pd.DataFrame:
         """Each new instance contains a colours class for formatting logging info."""
         self._col = col
+        self._dt_format = '%Y-%m-%d'
     
     def is_not_empty(self, s, pathway):
         """ Function responsible for detecting presence of white space or emptiness in contents of a file.
@@ -106,7 +115,45 @@ class DatabaseETL(Processor):
         
         import os
 
-        return bool(s and s.isspace() or os.stat(pathway).st_size==0)  
+        return bool(s and s.isspace() or os.stat(pathway).st_size==0) 
+    
+    def extract_year(self, date_obj, dt_format):
+        """ This function extracts the year from a datetime object as a string and returns it in integer form.
+        Args:
+        date_obj (datetime): datetime object which represents the extract date.
+        dt_format (string): string object representing the format of the date string.""" 
+        
+        from datetime import datetime
+        
+        date_str = date_obj.strftime(dt_format)
+        year = int(date_str[:4])
+        return year
+        
+    def validate_pathway_file(self, file):
+        """Examines pathway.txt file for the last known load path to determine which task_id is used for extarct_dt
+         
+        Args:
+            file (textfile): pathway script which monitors the load pathway taken.
+        """
+        import os 
+        import logging 
+        
+        pathway_array = []
+        
+        i = 0
+        with open(file, "r") as r:
+            for line in r:
+                pathway_array[i] = line
+                i+=1
+        try:
+            assert len(pathway_array) != 0, "File contents empty."
+            last_line = pathway_array[-1]
+            
+        except AssertionError as err:
+            logging.error(err)
+            exit
+        
+        return last_line
     
     def determine_format(self, pathway) -> str:
         """Function which determines if incremental or full load is necessary."""
@@ -204,7 +251,6 @@ class DatabaseETL(Processor):
             
             # get the number of races in the season by getting all race rounds greater than 0
             race_no = size.query("RoundNumber > 0").shape[0]
-            print(race_no)
             race_name_list = [] # empty list for storing races 
             final = [] # empty list for aggregated race data for all drivers during season
     
@@ -214,7 +260,6 @@ class DatabaseETL(Processor):
 
                 jam = f1.get_event(s, i)
                 race_name = jam.loc["EventName"] # access by column to get value of race
-                print(race_name)
                 race_name_list.append(race_name)
 
                 ff1 = f1.get_session(s, i, 'Q')
@@ -279,7 +324,10 @@ class DatabaseETL(Processor):
             
             # get the number of races in the season by getting all race rounds greater than 0
             race_no = size.query("RoundNumber > 0").shape[0]
-            print(race_no)
+            
+            if s == end_date:
+                incremental_race_counter = race_no
+            
             race_name_list = [] # empty list for storing races 
             final = [] # empty list for aggregated race data for all drivers during season
             
@@ -344,7 +392,6 @@ class DatabaseETL(Processor):
     
     def serialize_full(self, user_home, race_table, driver_table, season_table, race_telem_table, quali_telem_table):
         """ This method is responsible for serializing the files into csv format before they are uploaded in raw form to an s3 bucket for persistence."""
-        import os 
         import logging
         from datetime import datetime 
         import pandas as pd 
@@ -380,74 +427,577 @@ class DatabaseETL(Processor):
                 
         return extract_dt # return the date to push to xcoms for s3 hook to identify the file by the date for uploading into postgres 
        
-    def incremental_qualifying(self, cache_dir, start_date, end_date):
-        """This function handles the incremental extraction of qualifying data into the database"""
+    def incremental_qualifying(self, ti):
+        """This function handles the incremental extraction of qualifying data into the database.
+            Returns a string array containing data for all drivers for either a single or multiple qualifying sessions."""
         
         import logging
         import os
         from datetime import datetime 
         from decouple import config
+        import fastf1 as f1
+        import requests as r
+        import json
+        import logging
         
-        extract_dt = datetime.today().strftime("%Y-%m-%d")
-        cache_dir = config("inc_qualifying")
-        cache_dp = cache_dir.format(extract_dt)
+        # setting logging parameters 
+        logging.basicConfig(filename='', format='%(asctime)s %(message)s', encoding='utf-8', level=logging.ERROR)
+        logging.basicConfig(filename='', format='%(asctime)s %(message)s', encoding='utf-8', level=logging.INFO)
+
+        # setting parameters 
+        season = 2023 # this is determined from extract_dt in the function
+        round_no = 1 
+        event = 'qualifying'
+        race_name = []
+        path = config("pathway")
         
-        pass
+        #setting extract parameters
+        if self.validate_pathway_file(path) == 'Full':
+            extract_dt = ti.xcoms_pull(task_ids='full_load_serialization', key='extract_date') 
+        elif self.validate_pathway_file(path) == 'Incremental':
+            extract_dt = ti.xcoms_pull(task_ids='inc_load_serialization', key='incremental_extract_date') 
+            
+        dt_format = self._dt_format
+        
+        # getting season year from extract_dt param
+        season = self.extract_year(extract_dt, dt_format)
+        
+        while round_no != 0:
+            
+            # string url to produce json response by appending .json with request 
+            race_string = 'https://ergast.com/api/f1/{0}/{1}/{2}.json?limit=1000'.format(season, round_no, event)
+            
+            # exception handling for requests 
+            try:
+                # get response object then convert to text to then load to python dict obj
+                race = r.get(race_string, headers={'Authorization':'{0}' '{1}'.format('Accept', 'application/json'), 'Content-Type': 'application/json'})
+                race.raise_for_status() # generate status code to see if successful request received
+                try:
+                    t = race.text # generate text from response object
+                    race_j = json.loads(t) # load to python dict obj 
+                except ValueError as e:
+                    print("Empty JSON response.")
+                    logging.warning(e)
+                    break
+                
+            except race.exceptions.HTTPError as http_err:
+                print("Status code exceeded acceptable range: 200 <= x < 300 [Status code", race.status_code, "]")
+                logging.warning(http_err)
+
+            except race.exceptions.ConnectionError as conn_err:
+                logging.warning(conn_err)
+
+            except race.exceptions.Timeout as timeout_err:
+                logging.warning(timeout_err)
+
+            else:     
+
+                if not race_j["MRData"]: # dict is empty
+                    logging.critical("Empty JSON")
+                    
+                else: # dict is not empty 
+
+                    try: # get the name of the race to indicate a valid response
+                        
+                        # check for empty json response object for race key
+                        assert race_j['MRData']['RaceTable']['Races'] != [], "Race number exceeded season boundary. Data now up to date."
+                        
+                        # loop through race array
+                        for race in race_j['MRData']['RaceTable']['Races']:
+                                
+                            race_date_str = race['date']
+                            race_date = datetime.strptime(race_date_str, dt_format) # formatting into datetime obj
+                            
+                            if race_date > extract_dt: # if date of race is after last extract date
+                                race_season = race['season']
+
+                                for quali in race['QualifyingResults']:
+
+                                    driver_name = quali['Driver']['familyName']
+                                    driver_no = quali['number']
+                                    driver_identifier = quali['Driver']['code']
+                                    quali_pos = quali['position']
+                                    team_name = quali['Constructor']['constructorId']
+
+                                    try:
+                                        assert quali['Q1'] != [], "Driver did not participate in Q1."
+
+                                        q1_time = quali['Q1']
+
+                                        try:
+                                            assert quali['Q2'] != [], "Driver did not participate in Q2."
+                                            q2_time = quali['Q2']
+
+                                            try:
+                                                assert quali['Q3'] != [], "Driver did not participate in Q3."
+                                                q3_time = quali['Q3']
+
+                                            except KeyError as msg:
+                                                logging.error(msg)
+                                                logging.info("Driver did not participate in session. Setting as 0.")
+                                                q3_time = 0
+
+                                        except KeyError as msg:
+                                            logging.error(msg)
+                                            logging.info("Driver did not participate in session. Setting as 0.")
+                                            q2_time = 0
+
+                                    except KeyError as msg:
+                                        logging.error(msg)
+                                        logging.info("Driver did not participate in session. Setting as 0.")
+                                        q1_time = 0
+
+                                    race_n = {"race_id" : race['raceName'], "quali_date" : race['date'], "season_year" : race_season, 
+                                "driver_name": driver_name, "driver_no": driver_no, "driver_identifier": driver_identifier,
+                                "quali_pos": quali_pos, "team_name": team_name, "q1_time": q1_time, "q2_time": q2_time,
+                                "q3_time": q3_time} # add race name, race date to tuple 
+
+                                    race_name.append(race_n) # adding quali result data to list 
+
+                            # get race date from json, change to datetime object and compare to extract_dt 
+                            # if after date then initiate download of data. 
+
+                            else:
+                                logging.info("Data exists already - race date precedes extract date. Skipping.")
+                            
+                            round_no += 1 # increment counter for while loop
+                            
+                    except AssertionError as e:
+                        logging.info(e)
+                        break
+                    
+        return race_name                
     
-    def incremental_results(self, cache_dir, start_date, end_date):
-        """This function handles the incremental loading of race result data into the database"""
+    def incremental_results(self, ti):
+        """ Extracts race result data from fastf1 api, for the incremental load pathway. 
+        Args: 
+        ti : type=task_instance - responsible for accessing the current running task instance for xcoms data."""
         
+        import requests as r 
+        import json 
         import logging
-        import os
         from datetime import datetime 
         from decouple import config
+        import fastf1 as f1 
+       
+       # subfunction for unavailable data 
+        def debug_print(baddata, msg='data unavailable for driver'):
+            #this line just makes it easier to read
+            itemized = '\n'.join([f'\t{k}:{v}' for k, v in baddata.items()])
+            print(f'Problem: {msg}\n{itemized}')
+
+        # setting logging parameters 
+        logging.basicConfig(filename='', format='%(asctime)s %(message)s', encoding='utf-8', level=logging.ERROR)
+        logging.basicConfig(filename='', format='%(asctime)s $(message)s', encoding='utf-8', level=logging.INFO)
+
+        # setting parameters 
+        season = 2023 # this is determined from extract_dt in the function
+        round_no = 1 
+        event = 'results'
+        race_list = []
+        dt_format = self._dt_format
+        path = config("pathway")
         
-        extract_dt = datetime.today().strftime("%Y-%m-%d")
-        cache_dir = config("inc_results")
-        cache_dp = cache_dir.format(extract_dt)
+        #setting extract parameters
+        if self.validate_pathway_file(path) == 'Full':
+            extract_dt = ti.xcoms_pull(task_ids='full_load_serialization', key='extract_date') 
+        elif self.validate_pathway_file(path) == 'Incremental':
+            extract_dt = ti.xcoms_pull(task_ids='inc_load_serialization', key='incremental_extract_date') 
         
-        pass
+        # getting season year from extract_dt param
+        season = self.extract_year(extract_dt, dt_format)
+        
+        while round_no != 0:
+            # string url to produce json response by appending .json with request 
+            race_string = 'https://ergast.com/api/f1/{0}/{1}/{2}.json?limit=1000'.format(season, round_no, event)
+            
+            # exception handling for requests 
+            try:
+                # get response object then convert to text to then load to python dict obj
+                race = r.get(race_string, headers={'Authorization':'{0}' '{1}'.format('Accept', 'application/json'), 'Content-Type': 'application/json'})
+                race.raise_for_status() # generate status code to see if successful request recieved
+                try:
+                    t = race.text # generate text from response object
+                    race_j = json.loads(t) # load to python dict obj 
+                except ValueError as e:
+                    print("Empty JSON response.")
+                    logging.warning(e)
+                    break
+                
+            except race.exceptions.HTTPError as http_err:
+                print("Status code exceeded acceptable range: 200 <= x < 300 [Status code", race.status_code, "]")
+                logging.warning(http_err)
+
+            except ConnectionError as conn_err:
+                logging.warning(conn_err)
+
+            else:     
+
+                if not race_j["MRData"]: # dict is empty
+                    logging.critical("Empty JSON")
+                    
+                else: # dict is not empty 
+
+                    try: # get the name of the race to indicate a valid repsonse
+                        
+                        #check for empty json response object for race key
+                        assert race_j['MRData']['RaceTable']['Races'] != [], "Race number exceeded season boundary. Data now up to date."
+                        
+                        for race in race_j['MRData']['RaceTable']['Races']:
+                                
+                            # get race date from json, change to datetime object and compare to extract_dt 
+                            race_date_str = race['date']
+                            race_date = datetime.strptime(race_date_str, dt_format) # formatting into datetime obj
+                            
+                            # if after date then initiate download of data.
+                            if race_date > extract_dt:
+                                
+                                race_season = race['season']
+                                race_name = race['raceName']
+
+                                for results in race['Results']:
+
+                                    driver_name = results['Driver']['familyName']
+                                    driver_no = results['Driver']['permanentNumber']
+                                    driver_identifier = results['Driver']['code']
+                                    finishing_pos = results['position']
+                                    team_name = results['Constructor']['constructorId']
+                                    start_pos = results['grid']
+                                    points = results['points']
+                                    race_status = results['status']
+
+                                    # try and get the fastest lap for each driver 
+                                    try: 
+                                        fastest_lap = results['FastestLap']['Time']['time']
+                                    except KeyError as err:
+                                        # set the fastest_lap to 0
+                                        debug_print(results, str(err))
+                                        logging.info("Setting fastest lap as 0 for driver.")
+                                        fastest_lap = 0
+
+                                    race_n = {"race_id" : race_name, "quali_date" : race['date'], "season_year" : race_season, 
+                                "driver_name": driver_name, "driver_no": driver_no, "driver_identifier": driver_identifier,
+                                            "team_name": team_name, "start_pos": start_pos, "finishing_pos": finishing_pos, "fastest_lap": fastest_lap}
+
+                                    race_list.append(race_n) # adding quali result data to list 
+                            
+                            else:
+                                logging.info("Data exists already - race date precedes extract date. Skipping.")
+                            
+                            round_no += 1 # increment counter
+
+                    except AssertionError as e:
+                        logging.info(e)
+                        break
+                        
+        return race_list
     
-    def incremental_quali_telem(self, cache_dir, start_date, end_date):
-        import logging
-        import os
-        from datetime import datetime 
-        from decouple import config
+    def incremental_quali_telem(self, ti, cache_dir):
+        """ Extracts qualifying telemetry data from fastf1 api, for the incremental load pathway. 
+        Args: 
+        ti : type=task_instance - responsible for accessing the current running task instance for xcoms data
+        cache_dir = textfile - used to access the os directory where cache is stored or fast downloads."""
         
-        extract_dt = datetime.today().strftime("%Y-%m-%d")
+        from decouple import config
+        import fastf1 as f1 
+        import logging
+        from datetime import datetime 
+        import pandas as pd
+        import numpy as np
+
+        # setting parameters 
+        round_no = 1 
+        event = 'qualifying'
+        race_name = []
+        extract_dt = datetime(2023, 3, 23)
+        dt_format = self._dt_format
+        path = config("pathway")
+
         cache_dir = config("inc_qualitelem")
         cache_dp = cache_dir.format(extract_dt)
         
-        pass
-    
-    def incremental_race_telem(self, cache_dir, start_date, end_date):
-        import logging
-        import os
-        from datetime import datetime 
-        from decouple import config 
+        f1.Cache.enable_cache(cache_dp) 
         
-        extract_dt = datetime.today().strftime("%Y-%m-%d")
+        ultimate = [] # empty list to store dataframe for all results across multiple seasons
+
+        #setting extract parameters
+        if self.validate_pathway_file(path) == 'Full':
+            extract_dt = ti.xcoms_pull(task_ids='full_load_serialization', key='extract_date') 
+        elif self.validate_pathway_file(path) == 'Incremental':
+            extract_dt = ti.xcoms_pull(task_ids='inc_load_serialization', key='incremental_extract_date') 
+         
+        # getting season year variable from extract_dt param
+        season = self.extract_year(extract_dt, dt_format)
+
+        # initializing variables
+        size = f1.get_event_schedule(season)
+        # get the number of races in the season by getting all race rounds greater than 0
+        race_no = size.query("RoundNumber > 0").shape[0]
+        race_name_list = [] # empty list for storing races 
+        final = [] # empty list for aggregated race data for all drivers during season
+        race_number_list = [] # empty list for storing the index of valid races
+
+        # get all the names of the races for this season
+        for i in range(1, race_no):
+
+            event = size.get_event_by_round(i)
+            race_name = event.loc["EventName"] # access by column to get value of race
+            race_date = event.loc["EventDate"]# access by column to get value of date
+
+            if race_date > extract_dt: # condition for incremental download of new data
+                
+                # appending to array the race index 
+                race_number_list.append(i)
+                # appending information to array 
+                race_name_list.append(race_name) 
+                
+            else:
+                
+                logging.info("Race date precedes extract date. Skipping download.")
+                continue
+                
+        # LOOP THROUGH ARRAY AND GET INDEX OF ELEMENTS WHICH EXCEED EXTRACT DATE 
+        # THEN PUT THESE INDEXES IN ANOTHER ARRAY AND LOOP THROUGH USING THEM AS THE RACES TO DOWNLOAD
+
+        items = len(race_number_list)
+        for i in range (1, items):
+            number = race_name_list[i]
+
+            session = f1.get_session(season, number, identifier='Q', force_ergast=False)
+
+            # load all driver information for session
+            session.load(telemetry=True, laps=True, weather=True)
+            # load weather data
+            weather_data = session.laps.get_weather_data()
+
+            # selecting columns to be dropped from weather df
+            col = ["Time", "AirTemp", "Pressure", "WindDirection"]
+            for c in col:
+                weather_data.drop(c, axis=1, inplace=True)
+                weather_data = weather_data.reset_index(drop=True)
+
+            drivers = session.drivers
+            listd = []
+            series = []
+            driver_list = []
+
+            # loop through every driver in the race 
+            for d in drivers:
+
+                driver_t = session.laps.pick_driver(d) # load all race telemetry session for driver
+                driver_telem = driver_t.reset_index(drop=True)
+                listd.append(driver_telem) # append information to list
+                drive = pd.concat(listd) # concat to pandas series 
+                drive["season_year"] = season # add the season the telemetry pertains to
+                drive["race_name"] = race_name # add the race the telemetry pertains to
+                drive["pole_lap"] = session.laps.pick_fastest()
+
+                # telemetry data for drivers
+                try:
+                    telemetry = session.laps.pick_driver(d).get_telemetry()
+                    columns = ["Time", "DriverAhead", "SessionTime", "Date", "DRS", "Source", "Distance", "RelativeDistance", "Status", "X", "Y", "Z", "Brake"]
+                    for c in columns: #dropping irrelevant columns
+                        telemetry.drop(c, axis=1, inplace=True) 
+                    driver_telem = telemetry.reset_index(drop=True) #dropping index
+                    dt_quali = pd.DataFrame.from_dict(driver_telem) # creating dataframe from dict object 
+                    series.append(dt_quali) #appending to list
+                    driver_t = pd.concat(series) #concatenating to dataframe
+
+                    #append weather data, and telemetry data to existing dataframe of lap data
+                    telem = pd.concat([drive, weather_data, driver_t], ignore_index=True, sort=False)
+                    driver_list.append(telem)
+                except ValueError:
+                    print("No telemetry data available for car number: {}".format(d))
+                    continue
+                # drivers in a race
+                drivers_data = pd.concat(driver_list)
+                final.append(drivers_data)
+
+            # all races in a season
+            processed_data = pd.concat(final)
+            ultimate.append(processed_data)
+
+        quali_telemetry_table = pd.concat(ultimate)
+
+        column = ["SpeedST", "IsPersonalBest", "PitOutTime", "PitInTime", "TrackStatus","LapStartTime", "LapStartDate", "Sector1SessionTime", "FreshTyre", "Time", "Sector2SessionTime", "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "DistanceToDriverAhead"]
+        # drop irrelevant columns 
+        for c in column:
+            quali_telemetry_table.drop(c, axis=1, inplace=True)
+
+        # convert time deltas to strings and reformat 
+        col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time", "pole_lap"]
+        for c in col:
+            quali_telemetry_table[c] = quali_telemetry_table[c].astype(str).map(lambda x: x[10:])
+
+        # replace all empty values with NaN
+        quali_telemetry_table.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+
+        # provide desired column names 
+        quali_telemetry_table.columns = ["car_no", "lap_time", "lap_no", "s1_time", "s2_time", "s3_time", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier", "IsAccurate", "season_year", "race_name", "pole_lap", "humidity", "occur_of_rain_quali", "track_temp", "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
+
+        return quali_telemetry_table
+
+    def incremental_race_telem(self, ti, cache_dir):
+        """ Extracts race telemetry data from fastf1 api, for the incremental load pathway. 
+        Args: 
+        ti : type=task_instance - responsible for accessing the current running task instance for xcoms data
+        cache_dir = textfile - used to access the os directory where cache is stored or fast downloads."""
+        
+  
+        from decouple import config 
+        import fastf1 as f1 
+        import logging
+        from datetime import datetime 
+        import pandas as pd
+        import numpy as np
+
+        # setting parameters 
+        round_no = 1 
+        event = 'race'
+        race_name = []
+        extract_dt = datetime(2023, 3, 23)
+        dt_format = self._dt_format
+        path = config("pathway")
+
         cache_dir = config("inc_racetelem")
         cache_dp = cache_dir.format(extract_dt)
         
-        pass
+        f1.Cache.enable_cache(cache_dp) 
+        ultimate = [] # empty list to store dataframe for all results across multiple seasons
+
+        #initialising variables
+        size = f1.get_event_schedule(season)
+        # get the number of races in the season by getting all race rounds greater than 0
+        race_no = size.query("RoundNumber > 0").shape[0]
+        race_name_list = [] # empty list for storing races 
+        final = [] # empty list for aggregated race data for all drivers during season
+        race_number_list = [] # empty list for storing the index of valid races
+
+        #setting extract parameters
+        if self.validate_pathway_file(path) == 'Full':
+            extract_dt = ti.xcoms_pull(task_ids='full_load_serialization', key='extract_date') 
+        elif self.validate_pathway_file(path) == 'Incremental':
+            extract_dt = ti.xcoms_pull(task_ids='inc_load_serialization', key='incremental_extract_date') 
+         
+        # getting season year variable from extract_dt param
+        season = self.extract_year(extract_dt, dt_format)
+
+        #get all the names of the races for this season
+        for i in range(1, race_no):
+
+            event = size.get_event_by_round(i)
+            race_name = event.loc["EventName"] # access by column to get value of race
+            race_date = event.loc["EventDate"]# access by column to get value of date
+
+            if race_date > extract_dt: # condition for incremental download of new data
+                
+                # appending to array the race index 
+                race_number_list.append(i)
+                # appending information to array 
+                race_name_list.append(race_name) 
+                
+            else:
+                
+                logging.info("Race date precedes extract date. Skipping download.")
+                continue
+                
+        # THEN PUT THESE INDEXES IN ANOTHER ARRAY AND LOOP THROUGH USING THEM AS THE RACES TO DOWNLOAD
+
+        items = len(race_number_list)
+        for i in range (1, items):
+            number = race_name_list[i]
+
+            session = f1.get_session(season, number, identifier='R', force_ergast=False)
+
+            #load all driver information for session
+            session.load(telemetry=True, laps=True, weather=True)
+            #load weather data
+            weather_data = session.laps.get_weather_data()
+
+            # selecting columns to be dropped from weather df
+            col = ["Time", "AirTemp", "Pressure", "WindDirection"]
+            for c in col:
+                weather_data.drop(c, axis=1, inplace=True)
+                weather_data = weather_data.reset_index(drop=True)
+
+                drivers = session.drivers
+                listd = []
+                series = []
+                driver_list = []
+                
+                #loop through every driver in the race 
+                for d in drivers:
+                    driver_t = session.laps.pick_driver(d) # load all race telemetry session for driver
+                    driver_telem = driver_t.reset_index(drop=True)
+                    listd.append(driver_telem) # append information to list
+                    drive = pd.concat(listd) # concat to pandas series
+                    drive["season_year"] = season # add the season the telemetry pertains to
+                    drive["race_name"] = race_name # add the race the telemetry pertains to
+                    drive["fastest_lap"] = session.laps.pick_driver(d).pick_fastest()
+                    
+                    #telemetry data for drivers
+                    try:
+                        telemetry = session.laps.pick_driver(d).get_telemetry()
+                        columns = ["Time", "DriverAhead", "SessionTime", "Date", "DRS", "Source", "Distance", "RelativeDistance", "Status", "X", "Y", "Z", "Brake"]
+                        for c in columns: #dropping irrelevant columns
+                            telemetry.drop(c, axis=1, inplace=True) 
+                        driver_telem = telemetry.reset_index(drop=True) #dropping index
+                        dt_quali = pd.DataFrame.from_dict(driver_telem) # creating dataframe from dict object 
+                        series.append(dt_quali) #appending to list
+                        driver_t = pd.concat(series) #concatenating to dataframe
+
+                        #append weather data, and telemetry data to existing dataframe of lap data
+                        telem = pd.concat([drive, weather_data, driver_t], ignore_index=True, sort=False)
+                    except ValueError:
+                        print("No telemetry data available for car number - {}".format(d))
+                        continue
+                        
+                # drivers in a race
+                drivers_data = pd.concat(driver_list)
+                final.append(drivers_data)
+            
+            # all races in a season
+            processed_data = pd.concat(final)
+            ultimate.append(processed_data)
+            
+        race_telemetry_table = pd.concat(ultimate)
+                        
+        column = ["TrackStatus","LapStartTime", "LapStartDate", "Sector1SessionTime", "FreshTyre", "Time", "Sector2SessionTime", "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "SpeedST"]
+        #drop irrelevant columns 
+        for c in column:
+            race_telemetry_table.drop(c, axis=1, inplace=True)
+        
+        # convert time deltas to strings and reformat 
+        col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time", "fastest_lap"]
+        for c in col:
+            race_telemetry_table[c] = race_telemetry_table[c].astype(str).map(lambda x: x[10:])
+
+        # replace all empty values with NaN
+        race_telemetry_table.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+
+        # provide desired column names 
+        race_telemetry_table.columns =["car_no", "lap_time", "lap_no", "time_out", "time_in", "s1_time", "s2_time", "s3_time", "IsPersonalBest", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier", "IsAccurate", "season_year", "race_name", "fastest_lap", "pit_duration", "humidity", "occur_of_rain_race", "track_temp",  "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
+
+        return race_telemetry_table
     
     def increment_serialize(self, qualifying_table, results_table, race_telem_table, quali_telem_table):
+        """ """
         
         import logging
-        import os
         from datetime import datetime 
         from decouple import config
+        import pandas as pd
         
         logging.info("------------------------------Serializing DataFrames to CSV--------------------------------------")
         
         extract_dt = datetime.today().strftime("%Y-%m-%d")
 
-        dataframes = [qualifying_table, results_table, race_telem_table, quali_telem_table]
+        dataframes = [qualifying_table, results_table]
+        arrays = [race_telem_table, quali_telem_table]
         user_home = config("user_home")
         
         i = 0 # counter variable 
-        
+        j = 0
         #append date to the end of the files, and output to the correct directory
         for d in dataframes:
             
@@ -459,11 +1009,15 @@ class DatabaseETL(Processor):
             elif i == 2:
                 d.to_csv('Users/{}/cache/IncrementalProcessed/Results{}.csv'.format(user_home, extract_dt), index=False, header=True)
                 
-            elif i == 3:
-                d.to_csv('/Users/{}/cache/IncrementalProcessed/RaceTelem{}.csv'.format(user_home, extract_dt), index=False, header=True)
+        for a in arrays: # need to change this to handle string arrays and convert them to csv 
+            j += 1
+            if j == 1:
+                df = pd.DataFrame(a)
+                df.to_csv('/Users/{}/cache/IncrementalProcessed/RaceTelem{}.csv'.format(user_home, extract_dt), index=False, header=True)
                 
-            elif i == 4:
-                d.to_csv('/Users/{}/cache/IncrementalProcessed/QualifyingTelem{}.csv'.format(user_home, extract_dt), index=False, header=True)
+            elif j == 2:
+                df = pd.DatFrame(a)
+                df.to_csv('/Users/{}/cache/IncrementalProcessed/QualifyingTelem{}.csv'.format(user_home, extract_dt), index=False, header=True)
                 
         return extract_dt
      
@@ -679,6 +1233,7 @@ class DatabaseETL(Processor):
         """ This function will create the two views of the drivers championship and the constructors championship dynamically
         through stored procedures which append the race date to the end of the view name."""
         pass
+    
 class WarehouseETL(Processor):
     """This class handles the ETL process for the Data Warehouse in the specified manner needed for the respective data grain.
     Class for ETL from AWS S3 files into s3 stage in Snowflake."""
@@ -694,6 +1249,12 @@ class WarehouseETL(Processor):
         pass
 
     def determine_format(self):
+        pass
+    
+    def extract_year(self, date_obj, dt_format):
+        pass
+    
+    def validate_pathway_file(self, file):
         pass
     
     def extract_season_grain(self, cache_dir, start_date, end_date) -> pd.DataFrame:
