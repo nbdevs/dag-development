@@ -5,11 +5,12 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 
 from processor import DatabaseETL, WarehouseETL
 from director import Director
+from connections import PostgresClient, PostgresConnection
 from colours import Colours
 
 # Initializing global variables for duration of data collection
 start_date = 2017
-end_date = 2023
+end_date = 2022
 
 # Instantiating classes used within the ETL process
 col = Colours()

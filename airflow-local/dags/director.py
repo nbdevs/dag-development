@@ -33,6 +33,8 @@ class Director:
         self._full_processed_dir= config("full_processed_dir") # stores the csv files for full load
         self._inc_processed_dir= config("inc_processed_dir") # stores the csv files for incremental load 
     
+    
+    
     def change_data_detected(self, ti, qualifying_table, results_table, race_telem_table, quali_telem_table, extract_dt):
         """ This function follows on from the incremental pathway of the load_db function, after new change data is detected which needs to be reflected in the database.
         If changed data has been detected and the dag run has not been short circuited by the operator then this 
@@ -147,11 +149,11 @@ class Director:
         results_cache = config("results")
         logging.info("Extracting Aggregated Results Data...")
         # outputs dataframe containing aggregated results table which will be pushed to xcom
-        results_table, inc_race_counter = self._db_builder.extract_race_grain(results_cache, self._start_date, self._end_date)
+        results_table = self._db_builder.extract_race_grain(results_cache, self._start_date, self._end_date)
         
         # accessing current context of running task instance
-        ti.xcom_push(key='results_table', value=results_table) 
-   
+        ti.xcom_push(key='results_table', value=results_table)        
+        
         return 
         
 
@@ -167,7 +169,7 @@ class Director:
         telem_cache = config("telemetry")
         logging.info("Extracting Aggregated Race Telemetry Data...")
         # outputs dataframe containing all the aggregated race telem data to be outputted to xcoms.
-        race_telem_table = self._db_builder.extract_race_telem(telem_cache, self._start_date, self._end_date)
+        race_telem_table = self._db_builder.extract_race_telemetry(telem_cache, self._start_date, self._end_date)
 
         # accessing current context of running task instance
         ti.xcom_push(key='race_telem_table', value=race_telem_table)        
@@ -186,7 +188,7 @@ class Director:
         telem_cache = config("telemetry")
         logging.info("Extracting Aggregated Qualifying Telemetry Data...")
         # outputs the dataframe for the qualifying data to be stored in xcoms
-        quali_telem_table = self._db_builder.extract_quali_telem(telem_cache, self._start_date, self._end_date)
+        quali_telem_table = self._db_builder.extract_quali_telemetry(telem_cache, self._start_date, self._end_date)
             
         # accessing current context of running task instance 
         ti.xcom_push(key='quali_telem_table', value=quali_telem_table)        
@@ -389,13 +391,15 @@ class Director:
         from airflow.operators.python import PythonOperator
     
         logging.info("-----------------------------------Data extraction, cleaning and conforming-----------------------------------------")
+            
+        with TaskGroup(group_id=group_id, default_args=default_args, dag=dag) as full_load_s:
 
-        full_load_season = PythonOperator(task_id='full_season_load',
-                                                python_callable=self.full_load_season,
-                                                do_xcom_push=False,
-                                                sla=timedelta(minutes=100))
-                            
-        return full_load_season
+            full_load_season = PythonOperator(task_id='full_season_load',
+                                                    python_callable=self.full_load_season,
+                                                    do_xcom_push=False,
+                                                    sla=timedelta(minutes=100))
+                                
+        return full_load_s
 
     def full_load_race(self, dag, group_id, default_args):
         """This function calls the extract and load function to kick off the pipeline.
