@@ -37,7 +37,6 @@ class PostgresConnection(IConnection):
         postgres_uri = self._postgres_uri
         return postgres_uri
     
-    
 class SnowflakeConnection(IConnection):
     """ SnowflakeConnection class which provides a connection URI for all users of the snowflake data warehouse
         will provision read/write access to the dw dev for airflow processes."""
@@ -61,8 +60,7 @@ class SnowflakeConnection(IConnection):
     
     def upsert_wh(self, conn, ti):
         pass
-    
-    
+     
 class S3Connection(IConnection):
     """ S3Connection class which provisions connections to s3 buckets for cloud storage. 
         A bucket exists for each of:
@@ -141,7 +139,7 @@ class PostgresClient(AbstractClient):
         from psycopg2 import OperationalError, ProgrammingError
         from airflow.providers.postgres.hooks.postgres import PostgresHook
 
-        #instantiating postgres client details to pass to pg hook 
+        # instantiating postgres client details to pass to pg hook 
         try:
             pg_hook = PostgresHook(postgres_conn_id=conn)
             pg_connection = pg_hook.get_conn()
@@ -190,6 +188,10 @@ class PostgresClient(AbstractClient):
         pg_hook = PostgresHook(conn)
         pg_connection = pg_hook.get_conn()
         pg_cursor = pg_connection.cursor()
+        
+        #export table to csv then convert to dataframes 
+        #compare table data to new dataframe which diff/merge/compare function
+        #extract the new data only from new dataframe if any and then upsert into database tables. 
         
         pass
       
