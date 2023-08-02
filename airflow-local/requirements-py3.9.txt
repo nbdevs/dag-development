@@ -63,7 +63,7 @@ apache-airflow-providers-microsoft-psrp==2.3.0
 apache-airflow-providers-microsoft-winrm==3.2.0
 apache-airflow-providers-mongo==3.2.0
 apache-airflow-providers-neo4j==3.3.0
-apache-airflow-providers-odbc==3.3.0
+apache-airflow-providers-odbc==4.0.0
 apache-airflow-providers-openfaas==3.2.0
 apache-airflow-providers-opsgenie==5.1.0
 apache-airflow-providers-oracle==3.7.0
