@@ -422,7 +422,7 @@ nodeenv==1.8.0
 notebook==6.5.1
 notebook-shim==0.1.0
 npm==0.1.1
-numpy==1.21.6
+numpy==1.22.0
 oauthlib==3.2.2
 objsize==0.6.1
 openapi-schema-validator==0.4.4
