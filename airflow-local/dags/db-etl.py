@@ -21,7 +21,7 @@ db_director = Director(start_date, end_date, col, db_handler, dw_handler)
 
 # Defining baseline arguments for DAGs
 default_args = {
-    'start_date': datetime(2023, 3, 31),
+    'start_date': datetime(2023, 8, 1),
     'schedule_interval': '@weekly',
     'catchup_by_default': False,
     'do_xcom_push': True,
