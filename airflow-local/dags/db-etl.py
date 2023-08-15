@@ -22,13 +22,14 @@ db_director = Director(start_date, end_date, col, db_handler, dw_handler)
 # Defining baseline arguments for DAGs
 default_args = {
     'start_date': datetime(2023, 8, 1),
-    'schedule_interval': '@weekly',
+    'schedule_interval': 'None', # change this back to weekly after 
     'catchup_by_default': False,
     'do_xcom_push': True,
     'retries':1,
     'provide_context': True, 
     'retry_delay': timedelta(minutes=1),
-    'owner': 'airflow'
+    'owner': 'airflow',
+    'queue': 'db'
 }
 
 # Defining DAGs and tasks
@@ -53,7 +54,7 @@ with DAG(
     )
     
     # full load task groups 
-    full_extraction_load_season = db_director.full_season_load(db_etl, 'full_ext_load_season', default_args)
+    full_extraction_load_season = db_director.full_season_load()
     
     full_extraction_load_race = db_director.full_load_race(db_etl, 'full_ext_load_race', default_args)
     
@@ -90,6 +91,5 @@ with DAG(
 
 # Defining task dependencies
 
-retrieve_extraction_type >> determine_extraction_format 
-determine_extraction_format >> full_extraction_load_season >> full_extraction_load_race >> full_extraction_load_telemetry >> full_extraction_load_pre_transf >> full_transformation >> create_champ_views 
-determine_extraction_format >> incremental_extraction_load_race >> incremental_extraction_load_telem >> incremental_extraction_load_pre_transf >> change_data_capture >> changed_data_detected >> incremental_transformation >> create_champ_views 
+retrieve_extraction_type >> determine_extraction_format >> full_extraction_load_season >> full_extraction_load_race >> full_extraction_load_telemetry >> full_extraction_load_pre_transf >> full_transformation >> create_champ_views 
+retrieve_extraction_type >> determine_extraction_format >> incremental_extraction_load_race >> incremental_extraction_load_telem >> incremental_extraction_load_pre_transf >> change_data_capture >> changed_data_detected >> incremental_transformation >> create_champ_views 
