@@ -76,6 +76,7 @@ COPY --chown=airflow:root ./dags ${AIRFLOW_USER_HOME}/dags
 COPY --chown=airflow:root ./logs ${AIRFLOW_USER_HOME}/logs
 COPY --chown=airflow:root ./requirements-py3.9.txt ${AIRFLOW_USER_HOME}/requirements-py3.9.txt
 COPY --chown=airflow:root ./cache ${AIRFLOW_USER_HOME}/cache
+COPY --chown=airflow:root ./dags/.airflowignore ${AIRFLOW_USER_HOME}/dags/.airflowignore
 
 #setting permissions ont root directories for airflow user
 RUN chown -R airflow:root ${AIRFLOW_USER_HOME}
