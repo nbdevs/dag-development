@@ -82,7 +82,7 @@ class Director:
         
         if extract_type == 'Full':
             # path to taskgroup task
-            return 'full_ext_load_season.full_season_load'
+            return 'database_etl.full_season_load'
         
         elif extract_type == 'Incremental':
             
