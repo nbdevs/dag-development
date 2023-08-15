@@ -257,7 +257,7 @@ class Director:
         logging.info("Extracting Aggregated Qualifying Data.")
         
         # outputs the dataframe for the qualifying data to be stored in xcoms
-        qualifying_table = self._db_builder.incremental_qualifying(qualifying_dir, self._start_date, self._end_date)
+        qualifying_table = self._db_builder.incremental_qualifying(ti)
         
         # accessing current context of running task instance to push to xcoms
         ti.xcom_push(key='qualifying_table', value=qualifying_table)     
@@ -278,7 +278,7 @@ class Director:
         logging.info("Extracting Aggregated Results Data...")
         
         # outputs the dataframe for the race result data to be stored in xcoms
-        results_table = self._db_builder.incremental_results(results_dir, self._start_date, self._end_date)
+        results_table = self._db_builder.incremental_results(ti)
         
         # accessing current context of running task instance to push to xcoms
         ti.xcom_push(key='results_table', value=results_table)     
@@ -296,10 +296,10 @@ class Director:
         # cache folder for telemetry data
         quali_dir = config("inc_qualitelem")
         
-        logging.info("Extracting aggregated Race Telemetry data... ")
+        logging.info("Extracting aggregated Quali Telemetry data... ")
         
         # outputs the dataframe for the qualifying telemetry data to be stored in xcoms
-        quali_telem_table = self._db_builder.incremental_quali_telem(quali_dir, self._start_date, self._end_date)
+        quali_telem_table = self._db_builder.incremental_quali_telem(ti, quali_dir)
         
         # accessing current context of running task instance to push to xcoms
         ti.xcom_push(key='quali_telem_table', value=quali_telem_table)     
@@ -317,10 +317,10 @@ class Director:
         # cache folder for telemetry data
         race_dir = config("inc_racetelem")
         
-        logging.info("Extracting aggregated Quali Telemetry data... ")
+        logging.info("Extracting aggregated Race Telemetry data... ")
         
         # outputs the dataframe for the race telemetry data to be stored in xcoms
-        race_telem_table = self._db_builder.incremental_race_telem(race_dir, self._start_date, self._end_date)
+        race_telem_table = self._db_builder.incremental_race_telem(ti, race_dir)
         
         # accessing current context of running task instance to push to xcoms
         ti.xcom_push(key='race_telem_table', value=race_telem_table)     
@@ -378,14 +378,13 @@ class Director:
             
     # extract and load new data into database
 
-    def full_season_load(self, dag, group_id, default_args):
+    def full_season_load(self):
         """This function calls the extract and load function to kick off the pipeline.
         Takes three arguments, the first being the ETL orchestration class as a param, the second being the decision of full load vs incremental load, and finally a 
         reference to the task instance to push the results to the airflow metadata database."""
 
         import logging
         from datetime import timedelta
-        from airflow.utils.task_group import TaskGroup
         from airflow.operators.python import PythonOperator
     
         logging.info("-----------------------------------Data extraction, cleaning and conforming-----------------------------------------")
