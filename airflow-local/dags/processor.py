@@ -140,11 +140,9 @@ class DatabaseETL(Processor):
         
         pathway_array = []
         
-        i = 0
         with open(file, "r") as r:
             for line in r:
-                pathway_array[i] = line
-                i+=1
+                pathway_array.append(line)
         try:
             assert len(pathway_array) != 0, "File contents empty."
             last_line = pathway_array[-1]
@@ -432,7 +430,6 @@ class DatabaseETL(Processor):
             Returns a string array containing data for all drivers for either a single or multiple qualifying sessions."""
         
         import logging
-        import os
         from datetime import datetime 
         from decouple import config
         import fastf1 as f1
@@ -451,7 +448,7 @@ class DatabaseETL(Processor):
         race_name = []
         path = config("pathway")
         
-        #setting extract parameters
+        # setting extract parameters
         if self.validate_pathway_file(path) == 'Full':
             extract_dt = ti.xcoms_pull(task_ids='full_load_serialization', key='extract_date') 
         elif self.validate_pathway_file(path) == 'Incremental':
@@ -677,7 +674,8 @@ class DatabaseETL(Processor):
 
                                     race_n = {"race_id" : race_name, "quali_date" : race['date'], "season_year" : race_season, 
                                 "driver_name": driver_name, "driver_no": driver_no, "driver_identifier": driver_identifier,
-                                            "team_name": team_name, "start_pos": start_pos, "finishing_pos": finishing_pos, "fastest_lap": fastest_lap}
+                                            "team_name": team_name, "start_pos": start_pos, "finishing_pos": finishing_pos, "fastest_lap": fastest_lap, 
+                                            "points": points, "race_status": race_status}
 
                                     race_list.append(race_n) # adding quali result data to list 
                             
@@ -709,11 +707,9 @@ class DatabaseETL(Processor):
         round_no = 1 
         event = 'qualifying'
         race_name = []
-        extract_dt = datetime(2023, 3, 23)
         dt_format = self._dt_format
         path = config("pathway")
 
-        cache_dir = config("inc_qualitelem")
         cache_dp = cache_dir.format(extract_dt)
         
         f1.Cache.enable_cache(cache_dp) 
@@ -853,13 +849,11 @@ class DatabaseETL(Processor):
 
         # setting parameters 
         round_no = 1 
-        event = 'race'
         race_name = []
         extract_dt = datetime(2023, 3, 23)
         dt_format = self._dt_format
         path = config("pathway")
 
-        cache_dir = config("inc_racetelem")
         cache_dp = cache_dir.format(extract_dt)
         
         f1.Cache.enable_cache(cache_dp) 
