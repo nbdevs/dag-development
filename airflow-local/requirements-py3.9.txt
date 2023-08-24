@@ -54,7 +54,7 @@ apache-airflow-providers-google==10.1.1
 apache-airflow-providers-grpc==3.2.0
 apache-airflow-providers-hashicorp==3.4.0
 apache-airflow-providers-http==4.4.1
-apache-airflow-providers-imap==3.2.1
+apache-airflow-providers-imap==3.3.0
 apache-airflow-providers-influxdb==2.2.0
 apache-airflow-providers-jdbc==3.4.0
 apache-airflow-providers-jenkins==3.3.0
