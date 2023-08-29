@@ -355,7 +355,7 @@ jsonschema-spec==0.1.4
 junit-xml==1.9
 jupyter==1.0.0
 jupyter-console==6.6.3
-jupyter-server==1.21.0
+jupyter-server==2.7.2
 jupyter_client==7.4.9
 jupyter_core==4.12.0
 jupyterlab-pygments==0.2.2
