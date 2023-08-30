@@ -31,7 +31,7 @@ apache-airflow-providers-apache-livy==3.5.0
 apache-airflow-providers-apache-pig==4.1.0
 apache-airflow-providers-apache-pinot==4.1.0
 apache-airflow-providers-apache-spark==4.1.0
-apache-airflow-providers-apache-sqoop==3.2.0
+apache-airflow-providers-apache-sqoop==4.0.0
 apache-airflow-providers-arangodb==2.2.0
 apache-airflow-providers-asana==2.2.0
 apache-airflow-providers-atlassian-jira==2.1.0
