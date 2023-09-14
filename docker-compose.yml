@@ -63,7 +63,7 @@ services:
           - airflow
           
   postgresmaster:
-    image: nbroj/database-images:prod-db.v5.0.0
+    image: nbroj/database-images:prod-db.v5.0.1
     env_file:
       - .env
     environment:
@@ -142,7 +142,6 @@ services:
       timeout: 15s
       retries: 10
       start_period: 30s
-
   airflow-webserver:
     <<: *airflow-common
     command: webserver
@@ -178,7 +177,7 @@ services:
   airflow-worker1:
     <<: *airflow-common
     environment: *airflow-common-env
-    command: airflow celery worker  
+    command: airflow celery worker
     restart: always
     depends_on:
       <<: *airflow-common-depends-on
@@ -186,12 +185,12 @@ services:
       - ./airflow-local/logs:/usr/local/airflow/logs:rw
       - ./airflow-local/dags:/usr/local/airflow/dags:rw
       - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
-
+      
   flower:
     <<: *airflow-common
     environment: 
       <<: *airflow-common-env
-    command: airflow celery flower
+    command: airflow celery flower -A airflow.executors.celery_executor --broker=$AIRFLOW__CELERY__BROKER_API --broker-api=$AIRFLOW__CELERY__BROKER_URL --basic-auth="$RABBITMQ_USER:$RABBITMQ_PASSWORD"
     ports:
       - ${FLOWER_PORT}:${FLOWER_PORT}
     healthcheck:
