@@ -44,7 +44,7 @@ if [ "$AIRFLOW__CORE__EXECUTOR" != "SequentialExecutor" ]; then
 
     # Check if the user has provided explicit Airflow configuration for the broker's connection to the database
     if [ "$AIRFLOW__CORE__EXECUTOR" = "CeleryExecutor" ]; then
-      AIRFLOW__CELERY__RESULT_BACKEND="db+postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PG_MAS_HOST}:${PG_BOUNCER_PORT}/${POSTGRES_DB}/${POSTGRES_USER}"
+      AIRFLOW__CELERY__RESULT_BACKEND="db+postgresql+pyscopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PG_MAS_HOST}:${PG_BOUNCER_PORT}/${POSTGRES_DB}/${POSTGRES_USER}"
       export AIRFLOW__CELERY__RESULT_BACKEND
     fi
   else
