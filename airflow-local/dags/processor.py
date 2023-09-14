@@ -196,34 +196,41 @@ class DatabaseETL(Processor):
         f1.Cache.enable_cache(cache_dir) # enable cache for faster data retrieval
 
         data_holder = []
-        #outer for loop for seasons
+        # outer for loop for seasons
         for s in range(start_date, end_date):
             size = f1.get_event_schedule(s)
             size["season_year"] = s
             data_holder.append(size)
         
-        #CREATE data frame for season data
+        # CREATE data frame for season data
         for d in data_holder:
             
             season = pd.concat(data_holder)
 
         # drop session 1,2,3, and dates, f1api support, officialeventname from season data
+        logging.info("Dropping columns...")
+        columns = ["OfficialEventName", "Session1", "Session1Date", "Session2", "Session2Date", "Session3", "Session3Date","Session4", "Session5", "F1ApiSupport", "EventFormat", "EventDate", "Session1DateUtc", "Session2DateUtc", "Session3DateUtc", "Session4DateUtc", "Session5DateUtc"]
+        season.drop(columns, axis=1, inplace=True)
+        
+        print(season.columns)
 
-        columns = ["OfficialEventName", "Session1", "Session1Date", "Session2", "Session2Date", "Session3", "Session3Date", "F1ApiSupport", "EventFormat", "Session4", "Session5", "EventDate"]
-        for c in columns:
-            season.drop(c, axis=1, inplace=True)
-
-        #rename columns
-        #columns = {RoundNumber:race_round, Country:country, Location:city, EventName:race_name, Session4Date:quali_date, Session5Date:race_date}
-        #season.rename(columns, inplace=True, axis='columns')
+        # rename columns
         season.columns = ["race_round", "country", "city", "race_name", "quali_date", "races_date", "season_year"]
         season.index += 1
         season.index.name = "race_id"
     
-        #splitting the date and time apart
-        season["race_date"] = pd.to_datetime(season['races_date']).dt.date
-        season["race_time"] = pd.to_datetime(season["races_date"]).dt.time
-
+        # splitting the date and time apart
+        try:
+            season["race_date"] = pd.to_datetime(season['races_date']).dt.date
+            season["race_time"] = pd.to_datetime(season["races_date"]).dt.time
+            season["quali_date"] = pd.tp_datetime(season["quali_date"]).dt.date
+            
+        except ValueError:
+            
+            season["race_date"] = 0
+            season["race_time"] = 0
+            season["quali_date"] = 0
+            
         season.drop("races_date", axis=1, inplace=True)
         
         return season
@@ -271,10 +278,14 @@ class DatabaseETL(Processor):
                     name = ff1.get_driver(d)
                     newname = name.to_frame().T #invert columns and values 
 
-                    columns = ["BroadcastName", "Time", "FullName", "Status", "Points", "GridPosition"]
+                    columns = ["BroadcastName", "Time", "FullName", "Status", "Points", "GridPosition", "HeadshotUrl", "CountryCode", "ClassifiedPosition", "Abbreviation", "TeamId"]
+                    
+                    logging.info("Dropping columns...")
                     #drop irrelevant columns 
                     for c in columns:
                         newname.drop(c, axis=1, inplace=True)
+                    
+                    print(newname.columns)
                     
                     #provide desired column names 
                     newname.columns = ["car_number", "driver_id", "team_name", "team_colour", "forename", "surname", "quali_pos", "best_q1", "best_q2", "best_q3"]
@@ -312,6 +323,7 @@ class DatabaseETL(Processor):
         import fastf1 as f1 
         import pandas as pd
         import numpy as np
+        import logging
         
         f1.Cache.enable_cache(cache_dir) # enable cache for faster data retrieval 
         ultimate = [] # empty list to store dataframe for all results across multiple seasons
@@ -349,13 +361,17 @@ class DatabaseETL(Processor):
                     name = ff1.get_driver(d)
                     newname = name.to_frame().T #invert columns and values 
 
-                    columns = ["BroadcastName", "FullName", "Q1", "Q2", "Q3"]
+                    columns = ["BroadcastName", "FullName", "Q1", "Q2", "Q3", "Abbreviation", "CountryCode", "TeamId", "TeamColor", "HeadshotUrl", "Position"]
+                    
+                    logging.info("Dropping columns...")
                     #drop irrelevant columns 
                     for c in columns:
                         newname.drop(c, axis=1, inplace=True)
+                    
+                    print(newname.columns)
             
                     #provide desired column names 
-                    newname.columns = ["car_number", "driver_id", "team_name", "team_colour", "forename", "surname", "finish_pos", "start_pos", "Time", "driver_status_update", "race_points"]
+                    newname.columns = ["car_number", "driver_id", "team_name", "forename", "surname", "finish_pos", "start_pos", "Time", "driver_status_update", "race_points"]
                     #provide new index 
                     newname.index.name = "driver_id"
                     
@@ -696,15 +712,13 @@ class DatabaseETL(Processor):
         ti : type=task_instance - responsible for accessing the current running task instance for xcoms data
         cache_dir = textfile - used to access the os directory where cache is stored or fast downloads."""
         
+        import logging
         from decouple import config
         import fastf1 as f1 
-        import logging
-        from datetime import datetime 
         import pandas as pd
         import numpy as np
 
         # setting parameters 
-        round_no = 1 
         event = 'qualifying'
         race_name = []
         dt_format = self._dt_format
@@ -839,18 +853,15 @@ class DatabaseETL(Processor):
         ti : type=task_instance - responsible for accessing the current running task instance for xcoms data
         cache_dir = textfile - used to access the os directory where cache is stored or fast downloads."""
         
-  
+        import logging
         from decouple import config 
         import fastf1 as f1 
-        import logging
-        from datetime import datetime 
         import pandas as pd
         import numpy as np
 
         # setting parameters 
         round_no = 1 
         race_name = []
-        extract_dt = datetime(2023, 3, 23)
         dt_format = self._dt_format
         path = config("pathway")
 
@@ -933,8 +944,10 @@ class DatabaseETL(Processor):
                     try:
                         telemetry = session.laps.pick_driver(d).get_telemetry()
                         columns = ["Time", "DriverAhead", "SessionTime", "Date", "DRS", "Source", "Distance", "RelativeDistance", "Status", "X", "Y", "Z", "Brake"]
+                        logging.info("Dropping columns...")
                         for c in columns: #dropping irrelevant columns
                             telemetry.drop(c, axis=1, inplace=True) 
+                        print(telemetry.columns)   
                         driver_telem = telemetry.reset_index(drop=True) #dropping index
                         dt_quali = pd.DataFrame.from_dict(driver_telem) # creating dataframe from dict object 
                         series.append(dt_quali) #appending to list
@@ -942,6 +955,7 @@ class DatabaseETL(Processor):
 
                         #append weather data, and telemetry data to existing dataframe of lap data
                         telem = pd.concat([drive, weather_data, driver_t], ignore_index=True, sort=False)
+                        driver_list.append(telem)
                     except ValueError:
                         print("No telemetry data available for car number - {}".format(d))
                         continue
@@ -957,9 +971,11 @@ class DatabaseETL(Processor):
         race_telemetry_table = pd.concat(ultimate)
                         
         column = ["TrackStatus","LapStartTime", "LapStartDate", "Sector1SessionTime", "FreshTyre", "Time", "Sector2SessionTime", "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "SpeedST"]
+        logging.info("Dropping columns...")
         #drop irrelevant columns 
         for c in column:
             race_telemetry_table.drop(c, axis=1, inplace=True)
+        print(race_telemetry_table.columns)
         
         # convert time deltas to strings and reformat 
         col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time", "fastest_lap"]
@@ -1018,10 +1034,12 @@ class DatabaseETL(Processor):
     def extract_quali_telem(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         """ Full load of telemetry data for qualifying for each event of the race calendar.
             Takes the cache directory, start and end date for data load as parameters, and returns a dataframe."""
-          
+        
+        import logging 
         import pandas as pd
         import fastf1 as f1
         import numpy as np
+        
 
         f1.Cache.enable_cache(cache_dir) # enabling cache for faster data retrieval 
         ultimate = [] # empty list to store dataframe for all results across multiple seasons
@@ -1049,10 +1067,13 @@ class DatabaseETL(Processor):
                 
                 # selecting columns to be dropped from weather df
                 col = ["Time", "AirTemp", "Pressure", "WindDirection"]
+                logging.info("Dropping weather columns...")
                 for c in col:
                     weather_data.drop(c, axis=1, inplace=True)
                     weather_data = weather_data.reset_index(drop=True)
 
+                print(weather_data.columns)
+                
                 drivers = session.drivers #list of drivers in the session
                 listd = []
                 series = []
@@ -1073,8 +1094,11 @@ class DatabaseETL(Processor):
                     try:
                         telemetry = session.laps.pick_driver(d).get_telemetry()
                         columns = ["Time", "DriverAhead", "SessionTime", "Date", "DRS", "Source", "Distance", "RelativeDistance", "Status", "X", "Y", "Z", "Brake"]
+                        logging.info("Dropping driver telemetry columns...")
                         for c in columns: #dropping irrelevant columns
                             telemetry.drop(c, axis=1, inplace=True) 
+                        print(telemetry.columns)
+                        
                         driver_telem = telemetry.reset_index(drop=True) #dropping index
                         dt_quali = pd.DataFrame.from_dict(driver_telem) # creating dataframe from dict object 
                         series.append(dt_quali) #appending to list
@@ -1082,6 +1106,7 @@ class DatabaseETL(Processor):
 
                         #append weather data, and telemetry data to existing dataframe of lap data
                         telem = pd.concat([drive, weather_data, driver_t], ignore_index=True, sort=False)
+                        driver_list.append(telem)
                     except ValueError:
                         print("No data available for car number: {}".format(d))
                         continue
@@ -1096,9 +1121,11 @@ class DatabaseETL(Processor):
         quali_telemetry_table = pd.concat(ultimate)    
         
         column = ["SpeedST", "IsPersonalBest", "PitOutTime", "PitInTime", "TrackStatus","LapStartTime", "LapStartDate", "Sector1SessionTime", "FreshTyre", "Time", "Sector2SessionTime", "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "DistanceToDriverAhead"]
+        logging.info("Dropping quali telemetry columns...")
         #drop irrelevant columns 
         for c in column:
             quali_telemetry_table.drop(c, axis=1, inplace=True)
+        print(quali_telemetry_table.columns)
         
         #convert time deltas to strings and reformat 
         col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time", "pole_lap"]
@@ -1117,6 +1144,7 @@ class DatabaseETL(Processor):
         """Full load of telemetry data for qualifying for each event of the race calendar.
             Takes the cache directory, start and end date for data load as parameters, and returns a dataframe."""
         
+        import logging
         import pandas as pd
         import fastf1 as f1
         import numpy as np
@@ -1155,9 +1183,11 @@ class DatabaseETL(Processor):
                     
                 # selecting columns to be dropped from weather df
                 col = ["Time", "AirTemp", "Pressure", "WindDirection"]
+                logging.info("Dropping columns...")
                 for c in col:
                     weather_data.drop(c, axis=1, inplace=True)
                     weather_data = weather_data.reset_index(drop=True)
+                print(weather_data.columns)
 
                 drivers = session.drivers
                 listd = []
@@ -1178,8 +1208,10 @@ class DatabaseETL(Processor):
                     try:
                         telemetry = session.laps.pick_driver(d).get_telemetry()
                         columns = ["Time", "DriverAhead", "SessionTime", "Date", "DRS", "Source", "Distance", "RelativeDistance", "Status", "X", "Y", "Z", "Brake"]
+                        logging.info("Dropping telemetry columns...")
                         for c in columns: #dropping irrelevant columns
                             telemetry.drop(c, axis=1, inplace=True) 
+                        print(telemetry.columns)
                         driver_telem = telemetry.reset_index(drop=True) #dropping index
                         dt_quali = pd.DataFrame.from_dict(driver_telem) # creating dataframe from dict object 
                         series.append(dt_quali) #appending to list
@@ -1187,6 +1219,7 @@ class DatabaseETL(Processor):
 
                         #append weather data, and telemetry data to existing dataframe of lap data
                         telem = pd.concat([drive, weather_data, driver_t], ignore_index=True, sort=False)
+                        driver_list.append(telem)
                     except ValueError:
                         print("No data available for car number - {}".format(d))
                         continue
@@ -1201,9 +1234,11 @@ class DatabaseETL(Processor):
         race_telemetry_table = pd.concat(ultimate)
                          
         column = ["TrackStatus","LapStartTime", "LapStartDate", "Sector1SessionTime", "FreshTyre", "Time", "Sector2SessionTime", "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "SpeedST"]
+        logging.info("Dropping race telemetry columns...")
         #drop irrelevant columns 
-        for c in column:
+        for c in column: 
             race_telemetry_table.drop(c, axis=1, inplace=True)
+        print(race_telemetry_table.columns)
         
         #convert time deltas to strings and reformat 
         col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time", "fastest_lap"]
