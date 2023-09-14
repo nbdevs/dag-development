@@ -10,7 +10,7 @@ from colours import Colours
 
 # Initializing global variables for duration of data collection
 start_date = 2017
-end_date = 2022
+end_date = 2023
 
 # Instantiating classes used within the ETL process
 col = Colours()
@@ -21,7 +21,7 @@ db_director = Director(start_date, end_date, col, db_handler, dw_handler)
 
 # Defining baseline arguments for DAGs
 default_args = {
-    'start_date': datetime(2023, 8, 1),
+    'start_date': datetime(2023, 8, 20),
     'schedule_interval': 'None', # change this back to weekly after 
     'catchup_by_default': False,
     'do_xcom_push': True,
@@ -29,7 +29,7 @@ default_args = {
     'provide_context': True, 
     'retry_delay': timedelta(minutes=1),
     'owner': 'airflow',
-    'queue': 'db'
+    'queue': 'rabbit.db'
 }
 
 # Defining DAGs and tasks
