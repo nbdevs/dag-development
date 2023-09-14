@@ -31,5 +31,7 @@ rabbitmqctl add_user $RABBITMQ_USER3 $RABBITMQ_PASSWORD3 2>/dev/null ; \
 rabbitmqctl set_user_tags $RABBITMQ_USER3 "administrator" ; \
 rabbitmqctl set_permissions -p / $RABBITMQ_USER3  ".*" ".*" ".*" ; \
 
+rabbitmq-plugins enable rabbitmq_management
+
 # Create FLAG to alert in future runs of prior completion
 touch /$0.completed
