@@ -14,7 +14,7 @@ analytics-python==1.4.post1
 ansiwrap==0.8.4
 anyascii==0.3.2
 anyio==3.7.1
-apache-airflow==2.6.3
+apache-airflow==2.7.2
 apache-airflow-providers-airbyte==3.3.0
 apache-airflow-providers-alibaba==2.4.0
 apache-airflow-providers-amazon==8.1.0
