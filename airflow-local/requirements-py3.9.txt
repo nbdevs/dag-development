@@ -695,7 +695,7 @@ wcwidth==0.2.6
 webencodings==0.5.1
 websocket-client==1.6.1
 websockets==10.3
-Werkzeug==2.2.3
+Werkzeug==3.0.1
 widgetsnbextension==4.0.7
 wrapt==1.15.0
 WTForms==3.0.1
