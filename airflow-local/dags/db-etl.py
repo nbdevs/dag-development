@@ -9,7 +9,7 @@ from connections import PostgresClient, PostgresConnection
 from colours import Colours
 
 # Initializing global variables for duration of data collection
-start_date = 2017
+start_date = 2019 # telemetry data only available from 2019 onwards for races
 end_date = 2023
 
 # Instantiating classes used within the ETL process
