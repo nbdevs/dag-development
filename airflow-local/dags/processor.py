@@ -212,8 +212,6 @@ class DatabaseETL(Processor):
         columns = ["OfficialEventName", "Session1", "Session1Date", "Session2", "Session2Date", "Session3", "Session3Date","Session4", "Session5", "F1ApiSupport", "EventFormat", "EventDate", "Session1DateUtc", "Session2DateUtc", "Session3DateUtc", "Session4DateUtc", "Session5DateUtc"]
         season.drop(columns, axis=1, inplace=True)
         
-        print(season.columns)
-
         # rename columns
         season.columns = ["race_round", "country", "city", "race_name", "quali_date", "races_date", "season_year"]
         season.index += 1
@@ -258,7 +256,6 @@ class DatabaseETL(Processor):
             race_no = size.query("RoundNumber > 0").shape[0]
             race_name_list = [] # empty list for storing races 
             final = [] # empty list for aggregated race data for all drivers during season
-    
             
             #get all the names of the races for this season
             for i in range(1, race_no):
@@ -285,8 +282,6 @@ class DatabaseETL(Processor):
                     for c in columns:
                         newname.drop(c, axis=1, inplace=True)
                     
-                    print(newname.columns)
-                    
                     #provide desired column names 
                     newname.columns = ["car_number", "driver_id", "team_name", "team_colour", "forename", "surname", "quali_pos", "best_q1", "best_q2", "best_q3"]
                     #provide new index 
@@ -304,7 +299,7 @@ class DatabaseETL(Processor):
                     newname.replace(r'^\s*$', np.nan, regex=True, inplace=True)
                     listd.append(newname)
                     
-                     # drivers in a race
+                # drivers in a race
                 driver_data = pd.concat(listd)
                 final.append(driver_data)
             
@@ -361,14 +356,12 @@ class DatabaseETL(Processor):
                     name = ff1.get_driver(d)
                     newname = name.to_frame().T #invert columns and values 
 
-                    columns = ["BroadcastName", "FullName", "Q1", "Q2", "Q3", "Abbreviation", "CountryCode", "TeamId", "TeamColor", "HeadshotUrl", "Position"]
+                    columns = ["BroadcastName", "FullName", "Q1", "Q2", "Q3", "Abbreviation", "CountryCode", "TeamId", "TeamColor", "HeadshotUrl", "ClassifiedPosition"]
                     
                     logging.info("Dropping columns...")
                     #drop irrelevant columns 
                     for c in columns:
                         newname.drop(c, axis=1, inplace=True)
-                    
-                    print(newname.columns)
             
                     #provide desired column names 
                     newname.columns = ["car_number", "driver_id", "team_name", "forename", "surname", "finish_pos", "start_pos", "Time", "driver_status_update", "race_points"]
@@ -651,7 +644,7 @@ class DatabaseETL(Processor):
                     
                 else: # dict is not empty 
 
-                    try: # get the name of the race to indicate a valid repsonse
+                    try: # get the name of the race to indicate a valid response
                         
                         #check for empty json response object for race key
                         assert race_j['MRData']['RaceTable']['Races'] != [], "Race number exceeded season boundary. Data now up to date."
@@ -712,140 +705,146 @@ class DatabaseETL(Processor):
         ti : type=task_instance - responsible for accessing the current running task instance for xcoms data
         cache_dir = textfile - used to access the os directory where cache is stored or fast downloads."""
         
-        import logging
-        from decouple import config
-        import fastf1 as f1 
         import pandas as pd
+        import fastf1 as f1
         import numpy as np
+        import logging
+        import traceback
 
-        # setting parameters 
-        event = 'qualifying'
-        race_name = []
-        dt_format = self._dt_format
-        path = config("pathway")
+        # qualifying telemetry
 
-        cache_dp = cache_dir.format(extract_dt)
-        
-        f1.Cache.enable_cache(cache_dp) 
-        
+        f1.Cache.enable_cache('/Users/nicholasbojor/Documents/Cache/Full/Telemetry') 
         ultimate = [] # empty list to store dataframe for all results across multiple seasons
+        quali_telem_table = pd.DataFrame()
 
-        #setting extract parameters
-        if self.validate_pathway_file(path) == 'Full':
-            extract_dt = ti.xcoms_pull(task_ids='full_load_serialization', key='extract_date') 
-        elif self.validate_pathway_file(path) == 'Incremental':
-            extract_dt = ti.xcoms_pull(task_ids='inc_load_serialization', key='incremental_extract_date') 
-         
-        # getting season year variable from extract_dt param
-        season = self.extract_year(extract_dt, dt_format)
+        #outer for loop for seasons
+        for s in range(2017, 2019):
+            size = f1.get_event_schedule(s)
+            # get the number of races in the season by getting all race rounds greater than 0
+            race_no = size.query("RoundNumber > 0").shape[0]
+            race_name_list = [] # empty list for storing races 
+            final = [] # empty list for aggregated race data for all drivers during season
+            
+            # get all the names of the races for this season
+            for i in range(1, race_no):
 
-        # initializing variables
-        size = f1.get_event_schedule(season)
-        # get the number of races in the season by getting all race rounds greater than 0
-        race_no = size.query("RoundNumber > 0").shape[0]
-        race_name_list = [] # empty list for storing races 
-        final = [] # empty list for aggregated race data for all drivers during season
-        race_number_list = [] # empty list for storing the index of valid races
-
-        # get all the names of the races for this season
-        for i in range(1, race_no):
-
-            event = size.get_event_by_round(i)
-            race_name = event.loc["EventName"] # access by column to get value of race
-            race_date = event.loc["EventDate"]# access by column to get value of date
-
-            if race_date > extract_dt: # condition for incremental download of new data
-                
-                # appending to array the race index 
-                race_number_list.append(i)
-                # appending information to array 
+                event = size.get_event_by_round(i)
+                race_name = event.loc["EventName"] # access by column to get value of race
                 race_name_list.append(race_name) 
+                session = f1.get_session(s, i, identifier='Q', force_ergast=False)
                 
-            else:
-                
-                logging.info("Race date precedes extract date. Skipping download.")
-                continue
-                
-        # LOOP THROUGH ARRAY AND GET INDEX OF ELEMENTS WHICH EXCEED EXTRACT DATE 
-        # THEN PUT THESE INDEXES IN ANOTHER ARRAY AND LOOP THROUGH USING THEM AS THE RACES TO DOWNLOAD
-
-        items = len(race_number_list)
-        for i in range (1, items):
-            number = race_name_list[i]
-
-            session = f1.get_session(season, number, identifier='Q', force_ergast=False)
-
-            # load all driver information for session
-            session.load(telemetry=True, laps=True, weather=True)
-            # load weather data
-            weather_data = session.laps.get_weather_data()
-
-            # selecting columns to be dropped from weather df
-            col = ["Time", "AirTemp", "Pressure", "WindDirection"]
-            for c in col:
-                weather_data.drop(c, axis=1, inplace=True)
-                weather_data = weather_data.reset_index(drop=True)
-
-            drivers = session.drivers
-            listd = []
-            series = []
-            driver_list = []
-
-            # loop through every driver in the race 
-            for d in drivers:
-
-                driver_t = session.laps.pick_driver(d) # load all race telemetry session for driver
-                driver_telem = driver_t.reset_index(drop=True)
-                listd.append(driver_telem) # append information to list
-                drive = pd.concat(listd) # concat to pandas series 
-                drive["season_year"] = season # add the season the telemetry pertains to
-                drive["race_name"] = race_name # add the race the telemetry pertains to
-                drive["pole_lap"] = session.laps.pick_fastest()
-
-                # telemetry data for drivers
                 try:
-                    telemetry = session.laps.pick_driver(d).get_telemetry()
-                    columns = ["Time", "DriverAhead", "SessionTime", "Date", "DRS", "Source", "Distance", "RelativeDistance", "Status", "X", "Y", "Z", "Brake"]
-                    for c in columns: #dropping irrelevant columns
-                        telemetry.drop(c, axis=1, inplace=True) 
-                    driver_telem = telemetry.reset_index(drop=True) #dropping index
-                    dt_quali = pd.DataFrame.from_dict(driver_telem) # creating dataframe from dict object 
-                    series.append(dt_quali) #appending to list
-                    driver_t = pd.concat(series) #concatenating to dataframe
-
-                    #append weather data, and telemetry data to existing dataframe of lap data
-                    telem = pd.concat([drive, weather_data, driver_t], ignore_index=True, sort=False)
-                    driver_list.append(telem)
-                except ValueError:
-                    print("No telemetry data available for car number: {}".format(d))
+                    
+                    # load all driver information for session
+                    session.load(telemetry=True, laps=True, weather=True)
+                    
+                    # load weather data
+                    weather_data = session.laps.get_weather_data()
+        
+                    assert type(weather_data) == pd.core.frame.DataFrame, "Weather data unavailable for this race weekend."
+                except f1.core.DataNotLoadedError:
+                    logging.error("Telemetry data unavailable for Race Weekend No.{0}.".format(i))
                     continue
-                # drivers in a race
-                drivers_data = pd.concat(driver_list)
-                final.append(drivers_data)
+                except AssertionError as msg:
+                    logging.error(msg)
+                    continue
 
-            # all races in a season
-            processed_data = pd.concat(final)
-            ultimate.append(processed_data)
+                # selecting columns to be dropped from weather df
+                col = ["Time", "AirTemp", "Pressure", "WindDirection"]
+                for c in col:
+                    weather_data.drop(c, axis=1, inplace=True)
+                    weather_data = weather_data.reset_index(drop=True)
 
-        quali_telemetry_table = pd.concat(ultimate)
+                drivers = session.drivers
+                listd = []
+                series = []
+                driver_list = []
+                
+                #loop through every driver in the race 
+                for d in drivers:
+                    
+                    driver_t = session.laps.pick_driver(d) # load all race telemetry session for driver
+                    driver_telem = driver_t.reset_index(drop=True)
+                    listd.append(driver_telem) # append information to list
+                    drive = pd.concat(listd) # concat to pandas series 
+                    drive["season_year"] = s # add the season the telemetry pertains to
+                    drive["race_name"] = race_name # add the race the telemetry pertains to
+                    
+                    # Additional info
+                    driver_info = session.get_driver(d)
+                    name = driver_info["FullName"]
+                    drive["driver_name"] = name
+        
+                    driver_df = pd.DataFrame(drive) # invert columns and values
+                    
+                    # telemetry data for drivers
+                    try:
+                        
+                        telemetry = session.laps.pick_driver(d).get_telemetry()
+                        columns = ["Time", "DriverAhead", "SessionTime", "Date", "DRS", "Source", "Distance", "RelativeDistance", "Status", "X", "Y", "Z", "Brake"]
+                        for c in columns: # dropping irrelevant columns
+                            telemetry.drop(c, axis=1, inplace=True) 
+                        driver_telem = telemetry.reset_index(drop=True) # dropping index
+                        dt_quali = pd.DataFrame.from_dict(driver_telem) # creating dataframe from dict object 
+                        series.append(dt_quali) # appending to list
+                        driver_t = pd.concat(series) # concatenating to dataframe
+                        
+                        driver_telem_df = pd.DataFrame(driver_t) 
+                
+                        #append weather data, and telemetry data to existing dataframe of lap data
+                        telem = pd.concat([driver_df, weather_data, driver_telem_df], ignore_index=True, sort=False)
+                        driver_list.append(telem)
+                    except ValueError:
+                        logging.warning("No telemetry data available for Driver: {0} - No.{1}".format(name, d))
+                        continue
+                
+                try:
+                    # drivers in a race weekend
+                    drivers_data = pd.concat(driver_list)
+                    final.append(drivers_data)
+                except ValueError:
+                    logging.error("Telemetry data unavailable for Race Weekend No.{0}".format(i))
+                    continue
+            try:
+                # all races in a season
+                processed_data = pd.concat(final)
+                ultimate.append(processed_data)
 
-        column = ["SpeedST", "IsPersonalBest", "PitOutTime", "PitInTime", "TrackStatus","LapStartTime", "LapStartDate", "Sector1SessionTime", "FreshTyre", "Time", "Sector2SessionTime", "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "DistanceToDriverAhead"]
-        # drop irrelevant columns 
-        for c in column:
-            quali_telemetry_table.drop(c, axis=1, inplace=True)
+            except ValueError:
+                logging.error("Telemetry data unavailable for the {0} season.".format(s))
+                continue
 
-        # convert time deltas to strings and reformat 
-        col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time", "pole_lap"]
-        for c in col:
-            quali_telemetry_table[c] = quali_telemetry_table[c].astype(str).map(lambda x: x[10:])
+        column = ["SpeedST", "Driver", "IsPersonalBest", "PitOutTime", "PitInTime", "Sector1SessionTime", "Sector2SessionTime", "Sector3SessionTime", "Time", "WindSpeed",  "SpeedI1", "SpeedI2", "SpeedFL", "DistanceToDriverAhead", "LapStartDate", "LapStartTime", "TrackStatus"]
 
-        # replace all empty values with NaN
-        quali_telemetry_table.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+        try:
+            # concatenate data across seasons for full load
+            quali_telem_table = pd.concat(ultimate)
+            
+            #drop irrelevant columns in dataframe
+            for c in column:
+                quali_telem_table.drop(c, axis=1, inplace=True)
+            
+            #convert time deltas to strings and reformat 
+            col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time"]
 
-        # provide desired column names 
-        quali_telemetry_table.columns = ["car_no", "lap_time", "lap_no", "s1_time", "s2_time", "s3_time", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier", "IsAccurate", "season_year", "race_name", "pole_lap", "humidity", "occur_of_rain_quali", "track_temp", "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
+            for c in col:
+                quali_telem_table[c] = quali_telem_table[c].astype(str).map(lambda x: x[10:])
 
-        return quali_telemetry_table
+            #replace all empty values with NaN
+            quali_telem_table.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+
+            #provide desired column names to dataframe 
+            quali_telem_table.columns = ["car_no", "lap_time", "lap_no", "s1_time", "s2_time", "s3_time", "compound", "tyre_life","fresh_set", "race_stint", "team_name", "IsAccurate", "season_year", "race_name", "driver_name", "humidity", "occur_of_rain_quali", "track_temp", "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
+            
+        except ValueError:
+            logging.error("Exception desc: {0}".format(e))
+            logging.error("Unable to concatenate. DataFrame is empty.")
+            traceback.print_exc()
+        except KeyError as e:
+            logging.error("Key given in array not present in dataframe column.")
+            traceback.print_exc()
+
+        return quali_telem_table
 
     def incremental_race_telem(self, ti, cache_dir):
         """ Extracts race telemetry data from fastf1 api, for the incremental load pathway. 
@@ -864,13 +863,14 @@ class DatabaseETL(Processor):
         race_name = []
         dt_format = self._dt_format
         path = config("pathway")
+        msg = "Data unavailable due to lack of api support. Dataframe is empty for this season."
 
         cache_dp = cache_dir.format(extract_dt)
         
         f1.Cache.enable_cache(cache_dp) 
         ultimate = [] # empty list to store dataframe for all results across multiple seasons
 
-        #initialising variables
+        # initialising variables
         size = f1.get_event_schedule(season)
         # get the number of races in the season by getting all race rounds greater than 0
         race_no = size.query("RoundNumber > 0").shape[0]
@@ -914,10 +914,18 @@ class DatabaseETL(Processor):
 
             session = f1.get_session(season, number, identifier='R', force_ergast=False)
 
-            #load all driver information for session
-            session.load(telemetry=True, laps=True, weather=True)
-            #load weather data
-            weather_data = session.laps.get_weather_data()
+            try:
+                #load all driver information for session
+                session.load(telemetry=True, laps=True, weather=True), "Data unavailable for this session, skipping entirely."
+                #load weather data
+                weather_data = session.laps.get_weather_data()
+                
+            except f1._api.SessionNotAvailableError as msg:
+                logging.error(msg)
+                continue
+            except f1.core.DataNotLoadedError as msg:
+                logging.error(msg)
+                continue
 
             # selecting columns to be dropped from weather df
             col = ["Time", "AirTemp", "Pressure", "WindDirection"]
@@ -957,22 +965,30 @@ class DatabaseETL(Processor):
                         telem = pd.concat([drive, weather_data, driver_t], ignore_index=True, sort=False)
                         driver_list.append(telem)
                     except ValueError:
-                        print("No telemetry data available for car number - {}".format(d))
+                        logging.warning("No telemetry data available for car number - {}".format(d))
                         continue
-                        
-                # drivers in a race
-                drivers_data = pd.concat(driver_list)
-                final.append(drivers_data)
-            
-            # all races in a season
-            processed_data = pd.concat(final)
-            ultimate.append(processed_data)
-            
-        race_telemetry_table = pd.concat(ultimate)
+                try:         
+                    # drivers in a race
+                    drivers_data = pd.concat(driver_list)
+                    final.append(drivers_data)
+                except ValueError as msg:
+                    logging.warning(msg)
+                    continue
+            try:
+                # all races in a season
+                processed_data = pd.concat(final)
+                ultimate.append(processed_data)
+            except ValueError as msg:
+                logging.warning(msg)
+                continue
+        try:    
+            race_telemetry_table = pd.concat(ultimate)
+        except ValueError as msg:
+            logging.warning(msg)
                         
         column = ["TrackStatus","LapStartTime", "LapStartDate", "Sector1SessionTime", "FreshTyre", "Time", "Sector2SessionTime", "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "SpeedST"]
         logging.info("Dropping columns...")
-        #drop irrelevant columns 
+        # drop irrelevant columns 
         for c in column:
             race_telemetry_table.drop(c, axis=1, inplace=True)
         print(race_telemetry_table.columns)
@@ -1040,10 +1056,9 @@ class DatabaseETL(Processor):
         import fastf1 as f1
         import numpy as np
         
-
         f1.Cache.enable_cache(cache_dir) # enabling cache for faster data retrieval 
         ultimate = [] # empty list to store dataframe for all results across multiple seasons
-
+       
         #outer for loop for seasons
         for s in range(start_date, end_date):
             size = f1.get_event_schedule(s)
@@ -1060,10 +1075,22 @@ class DatabaseETL(Processor):
                 race_name_list.append(race_name) 
                 session = f1.get_session(s, i, identifier='Q', force_ergast=False)
                 
-                #load all driver information for session
-                session.load(telemetry=True, laps=True, weather=True)
-                #load weather data
-                weather_data = session.laps.get_weather_data()
+                try:
+                    #load all driver information for session
+                    session.load(telemetry=True, laps=True, weather=True), "Data unavailable for this session, skipping entirely."
+                    #load weather data
+                    weather_data = session.laps.get_weather_data()
+                    assert type(weather_data) == pd.core.frame.DataFrame, "[ERROR] Weather data unavailable for this race weekend."
+                    
+                except f1._api.SessionNotAvailableError:
+                    logging.error("[ERROR] Telemetry data unavailable for Race Weekend No.{0}.".format(i))
+                    continue
+                except f1.core.DataNotLoadedError:
+                    logging.error("[ERROR] Telemetry data unavailable for Race Weekend No.{0}.".format(i))
+                    continue
+                except AssertionError as msg:
+                    logging.error(msg)
+                    continue
                 
                 # selecting columns to be dropped from weather df
                 col = ["Time", "AirTemp", "Pressure", "WindDirection"]
@@ -1071,8 +1098,6 @@ class DatabaseETL(Processor):
                 for c in col:
                     weather_data.drop(c, axis=1, inplace=True)
                     weather_data = weather_data.reset_index(drop=True)
-
-                print(weather_data.columns)
                 
                 drivers = session.drivers #list of drivers in the session
                 listd = []
@@ -1089,6 +1114,9 @@ class DatabaseETL(Processor):
                     drive["season_year"] = s # add the season the telemetry pertains to
                     drive["race_name"] = race_name # add the race the telemetry pertains to
                     drive["pole_lap"] = session.laps.pick_fastest()
+                    driver_info = session.get_driver(d)
+                    name = driver_info["FullName"]
+            
                     
                     #telemetry data for drivers
                     try:
@@ -1108,36 +1136,44 @@ class DatabaseETL(Processor):
                         telem = pd.concat([drive, weather_data, driver_t], ignore_index=True, sort=False)
                         driver_list.append(telem)
                     except ValueError:
-                        print("No data available for car number: {}".format(d))
+                        logging.warning("[ALERT] No telemetry data available for Driver: {0} - No.{1}".format(name, d))
                         continue
-                # drivers in a race
-                drivers_data = pd.concat(driver_list)
-                final.append(drivers_data)
+                
+                try: 
+                    # drivers in a race
+                    drivers_data = pd.concat(driver_list)
+                    final.append(drivers_data)
+                except ValueError:
+                    logging.error("[ERROR] Telemetry data unavailable for Race Weekend No.{0}".format(i))
+                    continue
             
-            # all races in a season
-            processed_data = pd.concat(final)
-            ultimate.append(processed_data)
+            try:       
+                # all races in a season
+                processed_data = pd.concat(final)
+                ultimate.append(processed_data)
+                
+            except ValueError:
+                logging.error("[ERROR] Telemetry data unavailable for the {0} season.".format(s))
+                continue
             
-        quali_telemetry_table = pd.concat(ultimate)    
-        
-        column = ["SpeedST", "IsPersonalBest", "PitOutTime", "PitInTime", "TrackStatus","LapStartTime", "LapStartDate", "Sector1SessionTime", "FreshTyre", "Time", "Sector2SessionTime", "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "DistanceToDriverAhead"]
-        logging.info("Dropping quali telemetry columns...")
-        #drop irrelevant columns 
-        for c in column:
-            quali_telemetry_table.drop(c, axis=1, inplace=True)
-        print(quali_telemetry_table.columns)
-        
-        #convert time deltas to strings and reformat 
-        col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time", "pole_lap"]
-        for c in col:
-            quali_telemetry_table[c] = quali_telemetry_table[c].astype(str).map(lambda x: x[10:])
+            quali_telemetry_table = pd.concat(ultimate)
 
-        #replace all empty values with NaN
-        quali_telemetry_table.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+            columns = ["SpeedST", "IsPersonalBest", "PitOutTime", "PitInTime", "TrackStatus","LapStartTime", "LapStartDate", "Sector1SessionTime", "FreshTyre", "Time", "Sector2SessionTime", "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "DistanceToDriverAhead"]
+            #drop irrelevant columns 
+            for c in columns:
+                quali_telemetry_table.drop(c, axis=1, inplace=True)
 
-        #provide desired column names 
-        quali_telemetry_table.columns = ["car_no", "lap_time", "lap_no", "s1_time", "s2_time", "s3_time", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier", "IsAccurate", "season_year", "race_name", "pole_lap", "humidity", "occur_of_rain_quali", "track_temp", "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
+            #convert time deltas to strings and reformat 
+            col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time", "pole_lap"]
+            for c in col:
+                quali_telemetry_table[c] = quali_telemetry_table[c].astype(str).map(lambda x: x[10:])
 
+            #replace all empty values with NaN
+            quali_telemetry_table.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+
+            #provide desired column names 
+            quali_telemetry_table.columns = ["car_no", "lap_time", "lap_no", "s1_time", "s2_time", "s3_time", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier", "IsAccurate", "season_year", "race_name", "pole_lap", "humidity", "occur_of_rain_quali", "track_temp", "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
+            
         return quali_telemetry_table
     
     def extract_race_telem(self, cache_dir, start_date, end_date) -> pd.DataFrame:
@@ -1151,6 +1187,7 @@ class DatabaseETL(Processor):
 
         f1.Cache.enable_cache(cache_dir) #enabling cache for faster data retrieval 
         ultimate = [] # empty list to store dataframe for all results across multiple seasons
+        msg = "Telemetry data unavailable for this season, dataframe is empty."
 
         #outer for loop for seasons
         for s in range(start_date, end_date):
@@ -1166,20 +1203,30 @@ class DatabaseETL(Processor):
                 event = size.get_event_by_round(i)
                 race_name = event.loc["EventName"] # access by column to get value of race
                 race_name_list.append(race_name) 
-                session = f1.get_session(s, i, 'R')
+                session = f1.get_session(s, i, 'R', force_ergast=False)
                 
-                # load all driver information for session
-                session.load(telemetry=True, laps=True, weather=True)
-                
-                # testing if telemetry data has been loaded
                 try:
-                    session.laps.pick_driver("HAM").get_telemetry() 
-                except Exception as exc:
-                    print(f'"Telemetry data not available for {race_name}"')
-                    continue # move to the next race 
-
-                #load weather data
-                weather_data = session.laps.get_weather_data()
+                    #load all driver information for session
+                    session.load(telemetry=True, laps=True, weather=True)
+                    
+                except f1.core.DataNotLoadedError:
+                    logging.error("Telemetry data unavailable for Race Weekend No.{0}.".format(i))
+                    continue
+                except AssertionError as msg:
+                    logging.error(msg)
+                    continue
+                
+                try:
+                    #load weather data
+                    weather_data = session.laps.get_weather_data()
+        
+                    assert type(weather_data) == pd.core.frame.DataFrame, "Weather data unavailable for this race weekend."
+                except AssertionError as e:
+                    logging.error(e)
+                    continue
+                except f1.core.DataNotLoadedError:
+                    logging.error("Telemetry data unavailable for Race No.{0}".format(i))
+                    continue
                     
                 # selecting columns to be dropped from weather df
                 col = ["Time", "AirTemp", "Pressure", "WindDirection"]
@@ -1187,7 +1234,6 @@ class DatabaseETL(Processor):
                 for c in col:
                     weather_data.drop(c, axis=1, inplace=True)
                     weather_data = weather_data.reset_index(drop=True)
-                print(weather_data.columns)
 
                 drivers = session.drivers
                 listd = []
@@ -1204,6 +1250,13 @@ class DatabaseETL(Processor):
                     drive["race_name"] = race_name # add the race the telemetry pertains to
                     drive["fastest_lap"] = session.laps.pick_driver(d).pick_fastest()
                     
+                    # Additional info
+                    driver_info = session.get_driver(d)
+                    name = driver_info["FullName"]
+                    drive["driver_name"] = name
+                    
+                    driver_df = pd.DataFrame(drive) # invert columns and values
+            
                     #telemetry data for drivers
                     try:
                         telemetry = session.laps.pick_driver(d).get_telemetry()
@@ -1211,45 +1264,73 @@ class DatabaseETL(Processor):
                         logging.info("Dropping telemetry columns...")
                         for c in columns: #dropping irrelevant columns
                             telemetry.drop(c, axis=1, inplace=True) 
-                        print(telemetry.columns)
+
                         driver_telem = telemetry.reset_index(drop=True) #dropping index
-                        dt_quali = pd.DataFrame.from_dict(driver_telem) # creating dataframe from dict object 
-                        series.append(dt_quali) #appending to list
+                        dt_race = pd.DataFrame.from_dict(driver_telem) # creating dataframe from dict object 
+                        series.append(dt_race) #appending to list
                         driver_t = pd.concat(series) #concatenating to dataframe
 
+                        driver_telem_df = pd.DataFrame(driver_t) 
+         
                         #append weather data, and telemetry data to existing dataframe of lap data
-                        telem = pd.concat([drive, weather_data, driver_t], ignore_index=True, sort=False)
+                        telem = pd.concat([driver_df, weather_data, driver_telem_df], ignore_index=True, sort=False)
                         driver_list.append(telem)
                     except ValueError:
-                        print("No data available for car number - {}".format(d))
+                        logging.warning("No telemetry data available for Driver: {0} - No.{1}".format(name, d))
                         continue
-                # drivers in a race
-                drivers_data = pd.concat(driver_list)
-                final.append(drivers_data)
+                    except f1.core.DataNotLoadedError as e:
+                        logging.error(e)
+                        continue
+                try:
+                    # drivers in a race weekend
+                    drivers_data = pd.concat(driver_list)
+                    final.append(drivers_data)
+                except ValueError:
+                    logging.error("Telemetry data unavailable for Race Weekend No.{0}".format(i))
+                    continue
+            try:    
+                # all races in a season
+                processed_data = pd.concat(final)
+                ultimate.append(processed_data)
+            except ValueError:
+                logging.error("Telemetry data unavailable for the {0} season.".format(s))
+                continue
             
-            # all races in a season
-            processed_data = pd.concat(final)
-            ultimate.append(processed_data)
-            
-        race_telemetry_table = pd.concat(ultimate)
+        try:
+            race_telemetry_table = pd.concat(ultimate)
+        except ValueError as msg:
+            logging.warning(msg)
                          
-        column = ["TrackStatus","LapStartTime", "LapStartDate", "Sector1SessionTime", "FreshTyre", "Time", "Sector2SessionTime", "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "SpeedST"]
-        logging.info("Dropping race telemetry columns...")
-        #drop irrelevant columns 
-        for c in column: 
-            race_telemetry_table.drop(c, axis=1, inplace=True)
-        print(race_telemetry_table.columns)
-        
-        #convert time deltas to strings and reformat 
-        col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time", "fastest_lap"]
-        for c in col:
-            race_telemetry_table[c] = race_telemetry_table[c].astype(str).map(lambda x: x[10:])
+        column = ["Time","TrackStatus","LapStartTime", 
+          "LapStartDate", "Sector1SessionTime", "FreshTyre", "Sector2SessionTime", 
+          "Sector3SessionTime", "SpeedI1", "SpeedI2", "WindSpeed", "SpeedFL", "SpeedST",
+          "Driver"]
+        try:
+            # concatenate data across seasons for full load
+            race_telem_table = pd.concat(ultimate)
+            
+            logging.info("Dropping race telemetry columns...")
+            
+            #drop irrelevant columns 
+            for c in column: 
+                race_telem_table.drop(c, axis=1, inplace=True)
 
-        #replace all empty values with NaN
-        race_telemetry_table.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+            #convert time deltas to strings and reformat 
+            col=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time", "fastest_lap"]
+            for c in col:
+                race_telem_table[c] = race_telem_table[c].astype(str).map(lambda x: x[10:])
 
-        #provide desired column names 
-        race_telemetry_table.columns =["car_no", "lap_time", "lap_no", "time_out", "time_in", "s1_time", "s2_time", "s3_time", "IsPersonalBest", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier", "IsAccurate", "season_year", "race_name", "fastest_lap", "pit_duration", "humidity", "occur_of_rain_race", "track_temp",  "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
+            #replace all empty values with NaN
+            race_telem_table.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+
+            #provide desired column names 
+            race_telem_table.columns =["car_no", "lap_time", "lap_no", "time_out", "time_in", "s1_time", "s2_time", "s3_time", "IsPersonalBest", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier", "IsAccurate", "season_year", "race_name", "fastest_lap", "pit_duration", "humidity", "occur_of_rain_race", "track_temp", "revs_per_min", "car_speed", "gear_no", "throttle_pressure"]
+            
+        except ValueError as e:
+            logging.error("Exception desc: {0}".format(e))
+            logging.error("Unable to concatenate. DataFrame is empty.")
+        except KeyError:
+            logging.error("Key given in array not present in dataframe column.")
 
         return race_telemetry_table
         
