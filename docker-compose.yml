@@ -190,7 +190,7 @@ services:
     <<: *airflow-common
     environment: 
       <<: *airflow-common-env
-    command: airflow celery flower -A airflow.executors.celery_executor --broker=$AIRFLOW__CELERY__BROKER_API --broker-api=$AIRFLOW__CELERY__BROKER_URL --basic-auth="$RABBITMQ_USER:$RABBITMQ_PASSWORD"
+    command: airflow celery flower -A airflow.executors.celery_executor --broker-api=$AIRFLOW__CELERY__BROKER_URL --basic-auth="$RABBITMQ_USER:$RABBITMQ_PASSWORD"
     ports:
       - ${FLOWER_PORT}:${FLOWER_PORT}
     healthcheck:
