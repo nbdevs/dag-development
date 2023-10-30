@@ -147,7 +147,7 @@ class Director:
         results_cache = config("results")
         logging.info("Extracting Aggregated Results Data...")
         # outputs dataframe containing aggregated results table which will be pushed to xcom
-        results_table, inc_race_counter = self._db_builder.extract_race_grain(results_cache, self._start_date, self._end_date)
+        results_table = self._db_builder.extract_race_grain(results_cache, self._start_date, self._end_date)
         
         # accessing current context of running task instance
         ti.xcom_push(key='results_table', value=results_table) 
