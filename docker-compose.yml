@@ -1,12 +1,10 @@
-version: '3.9'
+version: "3.9"
 
-x-airflow-common:
-  &airflow-common
-  build: airflow-local
+x-airflow-common: &airflow-common
+  build: airflow_local
   env_file:
     - .env
-  environment:
-    &airflow-common-env
+  environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
     AIRFLOW__CORE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
     AIRFLOW__local__RESULT_BACKEND: ${AIRFLOW__local__RESULT_BACKEND}
@@ -14,20 +12,19 @@ x-airflow-common:
     AIRFLOW__CELERY__RESULT_BACKEND: ${AIRFLOW__CELERY__RESULT_BACKEND}
     AIRFLOW__CELERY__CELERY_BROKER_URL: ${AIRFLOW__CELERY__BROKER_URL}
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
-    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__CORE__ENABLE_XCOM_PICKLING: True
     _AIRFLOW_WWW_USER_CREATE: true
   group_add:
     - ${AIRFLOW_GID}
   user: ${AIRFLOW_UID}:${AIRFLOW_GID}
   volumes:
-    - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
-    - ./airflow-local/logs:/usr/local/airflow/logs:rw
-    - ./airflow-local/dags:/usr/local/airflow/dags:rw
-    - ./airflow-local/requirements-py3.9.txt:/requirements-py3.9.txt:rw
-  depends_on:
-    &airflow-common-depends-on
+    - ./airflow_local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
+    - ./airflow_local/logs:/usr/local/airflow/logs:rw
+    - ./airflow_local/dags:/usr/local/airflow/dags:rw
+    - ./airflow_local/requirements/requirements-py3.11.txt:/requirements-py3.11.txt:rw
+  depends_on: &airflow-common-depends-on
     postgresmaster:
       condition: service_healthy
     rabbitmq:
@@ -35,7 +32,7 @@ x-airflow-common:
 
 services:
   readreplica:
-    image: nbroj/database-images:prod-replica.v2.3.1
+    image: nbroj/database-images:prod-replica.v3.0.0
     env_file:
       - .env
     environment:
@@ -52,18 +49,18 @@ services:
     restart: always
     logging:
       options:
-        max-size: '10m'
-        max-file: '5'
-        labels: 'replica' 
+        max-size: "10m"
+        max-file: "5"
+        labels: "replica"
     networks:
       default:
         aliases:
-          - pgreplica
+          - readreplica
           - pgbouncer
           - airflow
-          
+
   postgresmaster:
-    image: nbroj/database-images:prod-db.v5.0.1
+    image: nbroj/database-images:prod-db.v6.0.0
     env_file:
       - .env
     environment:
@@ -79,9 +76,9 @@ services:
     restart: always
     logging:
       options:
-        max-size: '10m'
-        max-file: '5' 
-        labels: 'production'
+        max-size: "10m"
+        max-file: "5"
+        labels: "production"
     volumes:
       - pg_data:/var/lib/postgresql/data
       - pg_logs:/var/log/postgresql
@@ -89,10 +86,10 @@ services:
     networks:
       default:
         aliases:
-          - pgreplica
+          - readreplica
           - pgbouncer
           - airflow
-    healthcheck: 
+    healthcheck:
       test: pg_isready -d $POSTGRES_DB -U $AIRFLOW_USER
       interval: 15s
       timeout: 15s
@@ -100,7 +97,7 @@ services:
       start_period: 10s
 
   pgbouncer:
-    image: nbroj/database-images:prod-pgbouncer.v3.0.2
+    image: nbroj/database-images:prod-pgbouncer.v4.0.0
     env_file:
       - .env
     ports:
@@ -108,20 +105,20 @@ services:
     restart: always
     logging:
       options:
-        max-size: '10m'
-        max-file: '5'
-        labels: 'pgbouncer'
+        max-size: "10m"
+        max-file: "5"
+        labels: "pgbouncer"
     depends_on:
       postgresmaster:
         condition: service_healthy
     networks:
       default:
         aliases:
-          - pgreplica
-          - pgbouncer
+          - readreplica
+          - postgresmaster
     volumes:
-     - ./pgbouncer/pgbouncer.log:/var/log/pgbouncer.log:rw
-     - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:rw
+      - ./pgbouncer/pgbouncer.log:/var/log/pgbouncer.log:rw
+      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:rw
 
   rabbitmq:
     build: rabbitmq
@@ -142,6 +139,7 @@ services:
       timeout: 15s
       retries: 10
       start_period: 30s
+
   airflow-webserver:
     <<: *airflow-common
     command: webserver
@@ -154,8 +152,8 @@ services:
       retries: 5
     restart: always
     volumes:
-      - ./airflow-local/logs:/usr/local/airflow/logs:rw
-      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
+      - ./airflow_local/logs:/usr/local/airflow/logs:rw
+      - ./airflow_local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
     depends_on:
       <<: *airflow-common-depends-on
 
@@ -163,14 +161,18 @@ services:
     <<: *airflow-common
     command: scheduler
     healthcheck:
-      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname pgbouncer']
+      test:
+        [
+          "CMD-SHELL",
+          "airflow jobs check --job-type SchedulerJob --hostname pgbouncer",
+        ]
       interval: 10s
       timeout: 10s
       retries: 5
     restart: always
     volumes:
-      - ./airflow-local/logs:/usr/local/airflow/logs:rw
-      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
+      - ./airflow_local/logs:/usr/local/airflow/logs:rw
+      - ./airflow_local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
     depends_on:
       <<: *airflow-common-depends-on
 
@@ -182,13 +184,13 @@ services:
     depends_on:
       <<: *airflow-common-depends-on
     volumes:
-      - ./airflow-local/logs:/usr/local/airflow/logs:rw
-      - ./airflow-local/dags:/usr/local/airflow/dags:rw
-      - ./airflow-local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
-      
+      - ./airflow_local/logs:/usr/local/airflow/logs:rw
+      - ./airflow_local/dags:/usr/local/airflow/dags:rw
+      - ./airflow_local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
+
   flower:
     <<: *airflow-common
-    environment: 
+    environment:
       <<: *airflow-common-env
     command: airflow celery flower -A airflow.executors.celery_executor --broker-api=$AIRFLOW__CELERY__BROKER_URL --basic-auth="$RABBITMQ_USER:$RABBITMQ_PASSWORD"
     ports:
@@ -201,7 +203,6 @@ services:
     restart: always
     depends_on:
       <<: *airflow-common-depends-on
-      
 volumes:
   pg_data:
   pg_logs:
