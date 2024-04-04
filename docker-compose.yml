@@ -29,7 +29,7 @@ x-airflow-common:
 services:
   readreplica:
     image: nbroj/database-images:prod-replica.v3.0.0
-    image: nbroj/database-images:prod-replica.v3.0.0
+    
     env_file:
       - .env
     environment:
@@ -91,7 +91,6 @@ services:
       start_period: 10s
 
   pgbouncer:
-    image: nbroj/database-images:prod-pgbouncer.v4.0.0
     image: nbroj/database-images:prod-pgbouncer.v4.0.0
     env_file:
       - .env
@@ -165,8 +164,6 @@ services:
       retries: 5
     restart: always
     volumes:
-      - ./airflow_local/logs:/usr/local/airflow/logs:rw
-      - ./airflow_local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
       - ./airflow_local/logs:/usr/local/airflow/logs:rw
       - ./airflow_local/config/airflow.cfg:/usr/local/airflow/airflow.cfg
     depends_on:
