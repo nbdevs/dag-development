@@ -95,12 +95,6 @@ docker compose up -d # spin up container in detached form
   <img src="https://developers.redhat.com/sites/default/files/styles/article_feature/public/blog/2014/05/homepage-docker-logo.png?itok=zx0e-vcP" title="Docker" alt="Docker" width="50" height="40"/>&nbsp;
 </div>
 
-## Software Dependencies
-
-- graphviz
-- leveldb
-
-
 ## Status
 
 Ongoing development, major changes planned which will provide extra functionality.

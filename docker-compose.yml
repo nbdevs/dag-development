@@ -1,19 +1,20 @@
-version: "3.9"
+version: '3.9'
 
 x-airflow-common:
   &airflow-common
   build: airflow_local
   env_file:
     - .env
-  environment: &airflow-common-env
+  environment:
+    &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
     AIRFLOW__CORE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
     AIRFLOW__CELERY__CELERY_APP_NAME: ${AIRFLOW__CELERY__CELERY_APP_NAME}
     AIRFLOW__CELERY__RESULT_BACKEND: ${AIRFLOW__CELERY__RESULT_BACKEND}
     AIRFLOW__CELERY__CELERY_BROKER_URL: ${AIRFLOW__CELERY__BROKER_URL}
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
-    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__CORE__ENABLE_XCOM_PICKLING: True
     _AIRFLOW_WWW_USER_CREATE: true
   group_add:
@@ -29,7 +30,6 @@ x-airflow-common:
 services:
   readreplica:
     image: nbroj/database-images:prod-replica.v3.0.0
-    
     env_file:
       - .env
     environment:
@@ -46,9 +46,9 @@ services:
     restart: always
     logging:
       options:
-        max-size: "10m"
-        max-file: "5"
-        labels: "replica"
+        max-size: '10m'
+        max-file: '5'
+        labels: 'replica' 
     networks:
       default:
         aliases:
@@ -71,9 +71,9 @@ services:
     restart: always
     logging:
       options:
-        max-size: "10m"
-        max-file: "5"
-        labels: "production"
+        max-size: '10m'
+        max-file: '5' 
+        labels: 'production'
     volumes:
       - pg_data:/var/lib/postgresql/data
       - pg_logs:/var/log/postgresql
@@ -83,7 +83,7 @@ services:
         aliases:
           - pgmaster
           - airflow
-    healthcheck:
+    healthcheck: 
       test: pg_isready -d $POSTGRES_DB -U $AIRFLOW_USER
       interval: 15s
       timeout: 15s
@@ -99,9 +99,9 @@ services:
     restart: always
     logging:
       options:
-        max-size: "10m"
-        max-file: "5"
-        labels: "pgbouncer"
+        max-size: '10m'
+        max-file: '5'
+        labels: 'pgbouncer'
     depends_on:
       postgresmaster:
         condition: service_healthy
@@ -135,7 +135,6 @@ services:
       retries: 10
       start_period: 30s
 
-
   airflow-webserver:
     <<: *airflow-common
     command: webserver
@@ -154,11 +153,7 @@ services:
     <<: *airflow-common
     command: scheduler
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "airflow jobs check --job-type SchedulerJob --hostname pgbouncer",
-        ]
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname pgbouncer']
       interval: 10s
       timeout: 10s
       retries: 5
@@ -183,7 +178,7 @@ services:
       
   flower:
     <<: *airflow-common
-    environment:
+    environment: 
       <<: *airflow-common-env
     command: airflow celery flower -A ${AIRFLOW__CELERY__CELERY_APP_NAME}.app --broker=$AIRFLOW__CELERY__BROKER_API --broker-api=$AIRFLOW__CELERY__BROKER_URL --basic-auth="$RABBITMQ_USER:$NEW_PASS_RABBIT_ADMIN"
     ports:
@@ -196,6 +191,7 @@ services:
     restart: always
     depends_on:
       <<: *airflow-common-depends-on
+      
 volumes:
   pg_data:
   pg_logs:
