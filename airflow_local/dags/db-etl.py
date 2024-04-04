@@ -7,7 +7,6 @@ from airflow.models import Pool
 
 from processor import DatabaseETL, WarehouseETL
 from director import Director
-from connections import PostgresClient, PostgresConnection
 from colours import Colours
  
 # Initializing global variables for duration of data collection
@@ -68,14 +67,14 @@ with DAG(
     
     full_extraction_load_race = db_director.full_load_race(db_etl, 'full_ext_load_race', default_args)
     
-    full_extraction_load_telemetry = db_director.full_load_telemetry() # resource heavy tasks using kubernetespodoperator 
+    #  full_extraction_load_telemetry = db_director.full_load_telemetry() # resource heavy tasks using kubernetespodoperator 
 
     full_extraction_load_pre_transf = db_director.full_load_pre_transformation(db_etl, 'full_ext_load_pt', default_args)
     
     # incremental load task groups 
     incremental_extraction_load_race = db_director.inc_load_race(db_etl, 'incremental_ext_load_race', default_args)
     
-    incremental_extraction_load_telem = db_director.inc_load_telem() # resource heavy tasks using kubernetespodoperator 
+    # incremental_extraction_load_telem = db_director.inc_load_telem() # resource heavy tasks using kubernetespodoperator 
     
     incremental_extraction_load_pre_transf = db_director.inc_load_pre_transf(db_etl, 'incremental_ext_load_pt', default_args)
 
@@ -101,5 +100,5 @@ with DAG(
 
 # Defining task dependencies
 
-retrieve_extraction_type >> determine_extraction_format >> full_extraction_load_season >> full_extraction_load_race >> full_extraction_load_telemetry >> full_extraction_load_pre_transf >> full_transformation >> create_champ_views 
-retrieve_extraction_type >> determine_extraction_format >> incremental_extraction_load_race >> incremental_extraction_load_telem >> incremental_extraction_load_pre_transf >> change_data_capture >> changed_data_detected >> incremental_transformation >> create_champ_views 
+retrieve_extraction_type >> determine_extraction_format >> full_extraction_load_season >> full_extraction_load_race >> full_extraction_load_pre_transf >> full_transformation >> create_champ_views 
+retrieve_extraction_type >> determine_extraction_format >> incremental_extraction_load_race >> incremental_extraction_load_pre_transf >> change_data_capture >> changed_data_detected >> incremental_transformation >> create_champ_views 

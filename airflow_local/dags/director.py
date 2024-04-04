@@ -1,7 +1,3 @@
-from connections import PostgresClient, SnowflakeClient, S3Client, PostgresConnection
-from colours import Colours
-from processor import DatabaseETL, WarehouseETL
-
 class Director:
     """ This class coordinates the complete ETL pipeline, from API to DB to DW.
     Two functions for each process to upsert into database, and to effective load the data into data stores and then call 
@@ -12,6 +8,8 @@ class Director:
     def __init__(self, startPeriod, endPeriod, col, db_processor, dw_processor) -> pd.DataFrame:
         
         from decouple import config
+        from connections import PostgresClient, SnowflakeClient, S3Client, PostgresConnection
+
          
         self._db_builder = db_processor # instantiates the processor class to implement its functions 
         self._dw_builder = dw_processor # instantiates the processor class to implement its functions 
@@ -435,7 +433,8 @@ class Director:
                                                 do_xcom_push=False,
                                                 sla=timedelta(minutes=100))
             return full_load_race
-        
+     
+    '''
     def full_load_telemetry(self):
         """This function calls the extract and load function to kick off the pipeline.
         Takes three arguments, the first being the ETL orchestration class as a param, the second being the decision of full load vs incremental load, and finally a 
@@ -453,8 +452,7 @@ class Director:
             image_pull_policy='Never',
             task_id="full_load_telemetry",
             config_file=os.path.expanduser('~')+"/.kube/config",
-            env_vars={
-                'load_type': '''{{ti.xcom_pull(task_ids='determine_extract_format', key='extract_format')}}'''
+            env_vars={'load_type': ```{{ti.xcom_pull(task_ids='determine_extract_format', key='extract_format')}}```
             },
             do_xcom_push="no",
             on_finish_action="delete_pod",
@@ -462,7 +460,8 @@ class Director:
             get_logs=True,
             deferrable=True
         )
-        return full_load_telem   
+        return full_load_telem
+    '''
         
         
     def full_load_pre_transformation(self, dag, group_id, default_args):
@@ -496,25 +495,25 @@ class Director:
         import logging
         from datetime import timedelta
         from airflow.utils.task_group import TaskGroup
-        from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
+        from airflow.operators.python import PythonOperator
             
         logging.info("-----------------------------------Data extraction, cleaning and conforming-----------------------------------------")
             
         with TaskGroup(group_id=group_id, default_args=default_args, dag=dag) as incremental_load_race:
 
-            incremental_qualifying = KubernetesPodOperator(task_id='incremental_qualifying_load',
+            incremental_qualifying = PythonOperator(task_id='incremental_qualifying_load',
                                                     python_callable=self.inc_qualifying,
                                                     do_xcom_push=True,
                                                     sla=timedelta(minutes=10))
 
-            incremental_results = KubernetesPodOperator(task_id='incremental_results_load',
+            incremental_results = PythonOperator(task_id='incremental_results_load',
                                                             python_callable=self.inc_results,
                                                             do_xcom_push=True,
                                                             sla=timedelta(minutes=10))
 
         return incremental_load_race
 
-
+    '''
     def inc_load_telem(self):
         """This function calls the extract and load function to kick off the pipeline.
         Takes five arguments, the first first is a reference to the task instance to push the results to the airflow metadata database.
@@ -540,6 +539,7 @@ class Director:
             deferrable=True
         )
         return inc_load_telem  
+        '''
 
     def inc_load_pre_transf(self, dag, group_id, default_args):
         """This function calls the extract and load function to kick off the pipeline.
