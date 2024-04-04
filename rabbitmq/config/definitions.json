@@ -2,7 +2,6 @@
     "users": [
         {
         "name" : "rabbit_admin",
-
         "password": "admin",
         "tags" : "administrator"
         }
