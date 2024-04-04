@@ -12,7 +12,7 @@ class Director:
     def __init__(self, startPeriod, endPeriod, col, db_processor, dw_processor) -> pd.DataFrame:
         
         from decouple import config
-        
+         
         self._db_builder = db_processor # instantiates the processor class to implement its functions 
         self._dw_builder = dw_processor # instantiates the processor class to implement its functions 
         self._postgres = PostgresClient() # conn string for db dev or dw dev 
@@ -166,13 +166,11 @@ class Director:
         # cache folder for telemetry data
         telem_cache = config("telemetry")
         logging.info("Extracting Aggregated Race Telemetry Data...")
+        
         # outputs dataframe containing all the aggregated race telem data to be outputted to xcoms.
         race_telem_table = self._db_builder.extract_race_telem(telem_cache, self._start_date, self._end_date)
 
-        # accessing current context of running task instance
-        ti.xcom_push(key='race_telem_table', value=race_telem_table)        
-        
-        return 
+        return race_telem_table
 
     def full_load_quali_telem(self, ti):
         """ This function generates the tabled data for the telemetry level of granularity for F1 races.
@@ -185,37 +183,31 @@ class Director:
         # cache folder for telemetry data
         telem_cache = config("telemetry")
         logging.info("Extracting Aggregated Qualifying Telemetry Data...")
-        # outputs the dataframe for the qualifying data to be stored in xcoms
-        quali_telem_table = self._db_builder.extract_quali_telem(telem_cache, self._start_date, self._end_date)
-            
-        # accessing current context of running task instance 
-        ti.xcom_push(key='quali_telem_table', value=quali_telem_table)        
         
-        return 
+        # outputs the dataframe for the qualifying data 
+        quali_telem_table = self._db_builder.extract_quali_telem(telem_cache, self._start_date, self._end_date)
+        
+        return quali_telem_table
         
     def full_load_serialize(self, ti):
-        """ This function generates the CSV files for the tabled data for all levels of granularity.
+        """ This function generates the CSV files for the tabled data for all season and race level of granularity.
         Takes two inputs, one being the db_handler which is a reference to the processor class, and 
         a ti argument for a reference to the task instance of the current running instance"""
         
         import logging
         from decouple import config
         
-        # directory which the processed csv files are output to as a result of this function
-        processed_dir = config("user_home")
-        
         logging.info("Serializing pandas Tables into CSV...")
         
+        # pulling data for respective tables
         results_table = ti.xcoms_pull(task_ids='full_results_load', key='results_table')
         qualifying_table = ti.xcoms_pull(task_ids='full_qualifying_load', key='qualifying_table')
         season_table = ti.xcoms_pull(task_ids='full_season_load', key='season_table')
-        race_telem_table = ti.xcoms_pull(task_ids='full_race_telem_load', key='race_telem_table')
-        quali_telem_table = ti.xcoms_pull(task_ids='full_quali_telem_load', key='quali_telem_table')
         
-        # creates the extract date after the function is executed which will be pushed to xcoms.
-        extract_dt = self._db_builder.serialize_full(processed_dir, results_table, qualifying_table, season_table, race_telem_table, quali_telem_table)
+        # creates the extract date after the function is executed which will be pushed to xcoms, pathway for full load batch
+        extract_dt = self._db_builder.serialize_full(results_table, qualifying_table, season_table, 1)
         
-        # pushing value to xcoms
+        # pushing extract date value to xcoms
         ti.xcom_push(key='extract_date', value=extract_dt)        
         
         return 
@@ -242,6 +234,31 @@ class Director:
         self._postgres.upsert_db(pg_conn_uri, ti, incremental_dir, full_dir, extract_dt)
         
         return
+    
+    def telemetry_preprocess(self, load_type):
+        """ This function is required for the kubernetes management of telemetry loading due to excessive memory constraints.
+        """
+        import logging
+        from decouple import config
+        
+        # cache folder for incremental and full pathway processed csv files containing table data
+        incremental_dir = config("inc_processed_dir")
+        full_dir = config("full_processed_dir")
+        
+        logging.info("Serializing pandas tables into CSV...")
+        
+        race_telem_table = self.full_load_race_telem()
+        
+        quali_telem_table = self.full_load_quali_telem()
+        
+        extract_dt = self._db_builder.serialize_full(race_telem_table, quali_telem_table, 2) # serialize method for the telemetry data
+        
+        # pushing data into database
+        #initializing postgres client to generate postgres connection uri
+        pg_conn_uri = self._postgres.connection_factory(1, self._col) # calling connection method to get connection string with 1 specified for the database developer privileges
+        self._postgres.upsert_db(pg_conn_uri, load_type, incremental_dir, full_dir, extract_dt)
+        
+        return
 
     def inc_qualifying(self, ti):
         """ This function generates the tabled data for the race level of granularity for F1 races.
@@ -257,7 +274,7 @@ class Director:
         logging.info("Extracting Aggregated Qualifying Data.")
         
         # outputs the dataframe for the qualifying data to be stored in xcoms
-        qualifying_table = self._db_builder.incremental_qualifying(ti)
+        qualifying_table = self._db_builder.incremental_qualifying(ti, qualifying_dir)
         
         # accessing current context of running task instance to push to xcoms
         ti.xcom_push(key='qualifying_table', value=qualifying_table)     
@@ -278,14 +295,14 @@ class Director:
         logging.info("Extracting Aggregated Results Data...")
         
         # outputs the dataframe for the race result data to be stored in xcoms
-        results_table = self._db_builder.incremental_results(ti)
+        results_table = self._db_builder.incremental_results(ti, results_dir)
         
         # accessing current context of running task instance to push to xcoms
         ti.xcom_push(key='results_table', value=results_table)     
             
         return
         
-    def inc_quali_telem(self, ti):
+    def inc_quali_telem(self, start_date, end_date):
         """ This function generates the tabled data for the telemetry level of granularity for F1 races.
         Takes two inputs, one being the db_handler which is a reference to the processor class, and 
         a ti argument for a reference to the task instance of the current running instance"""
@@ -299,12 +316,12 @@ class Director:
         logging.info("Extracting aggregated Quali Telemetry data... ")
         
         # outputs the dataframe for the qualifying telemetry data to be stored in xcoms
-        quali_telem_table = self._db_builder.incremental_quali_telem(ti, quali_dir)
+        quali_telem_table = self._db_builder.incremental_quali_telem(quali_dir, start_date, end_date)
         
         # accessing current context of running task instance to push to xcoms
-        ti.xcom_push(key='quali_telem_table', value=quali_telem_table)     
+        #ti.xcom_push(key='quali_telem_table', value=quali_telem_table)     
             
-        return 
+        return quali_telem_table
 
     def inc_race_telem(self, ti):
         """ This function generates the tabled data for the telemetry level of granularity for F1 races.
@@ -323,9 +340,9 @@ class Director:
         race_telem_table = self._db_builder.incremental_race_telem(ti, race_dir)
         
         # accessing current context of running task instance to push to xcoms
-        ti.xcom_push(key='race_telem_table', value=race_telem_table)     
+        #ti.xcom_push(key='race_telem_table', value=race_telem_table)     
             
-        return 
+        return race_telem_table
 
     def inc_load_serialize(self, ti):
         """ This function generates the CSV files for all levels of granularity which are converted from the previously generated dataframes. 
@@ -363,6 +380,7 @@ class Director:
         
         # cache folder for incremental and full pathway processed csv files containing table data
         incremental_dir = config("inc_processed_dir")
+       
         full_dir = config("full_processed_dir")
         
         logging.info("Upserting data into Postgres ")
@@ -418,29 +436,34 @@ class Director:
                                                 sla=timedelta(minutes=100))
             return full_load_race
         
-    def full_load_telemetry(self, dag, group_id, default_args):
+    def full_load_telemetry(self):
         """This function calls the extract and load function to kick off the pipeline.
         Takes three arguments, the first being the ETL orchestration class as a param, the second being the decision of full load vs incremental load, and finally a 
         reference to the task instance to push the results to the airflow metadata database."""
 
-        from datetime import timedelta
-        from airflow.utils.task_group import TaskGroup
-        from airflow.operators.python import PythonOperator
+        import os
+        from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
+        from kubernetes.client import models as k8s
         
-        with TaskGroup(group_id=group_id, default_args=default_args, dag=dag) as full_load_telemetry:
-
-            
-            full_load_race_telem = PythonOperator(task_id='full_race_telem_load',
-                                                            python_callable=self.full_load_race_telem,
-                                                            do_xcom_push=False,
-                                                            sla=timedelta(minutes=100))
-            
-            full_load_quali_telem = PythonOperator(task_id='full_quali_telem_load',
-                                                            python_callable=self.full_load_quali_telem,
-                                                            do_xcom_push=False,
-                                                            sla=timedelta(minutes=100))
-
-            return full_load_telemetry
+                
+        full_load_telem = KubernetesPodOperator( 
+            namespace="default",
+            image="nbroj/airflow-images:airflow-schedulerv1.0.0",
+            image_pull_secrets=[],
+            image_pull_policy='Never',
+            task_id="full_load_telemetry",
+            config_file=os.path.expanduser('~')+"/.kube/config",
+            env_vars={
+                'load_type': '''{{ti.xcom_pull(task_ids='determine_extract_format', key='extract_format')}}'''
+            },
+            do_xcom_push="no",
+            on_finish_action="delete_pod",
+            in_cluster= False,
+            get_logs=True,
+            deferrable=True
+        )
+        return full_load_telem   
+        
         
     def full_load_pre_transformation(self, dag, group_id, default_args):
         """This function calls the extract and load function to kick off the pipeline.
@@ -473,18 +496,18 @@ class Director:
         import logging
         from datetime import timedelta
         from airflow.utils.task_group import TaskGroup
-        from airflow.operators.python import PythonOperator
+        from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
             
         logging.info("-----------------------------------Data extraction, cleaning and conforming-----------------------------------------")
             
         with TaskGroup(group_id=group_id, default_args=default_args, dag=dag) as incremental_load_race:
 
-            incremental_qualifying = PythonOperator(task_id='incremental_qualifying_load',
+            incremental_qualifying = KubernetesPodOperator(task_id='incremental_qualifying_load',
                                                     python_callable=self.inc_qualifying,
                                                     do_xcom_push=True,
                                                     sla=timedelta(minutes=10))
 
-            incremental_results = PythonOperator(task_id='incremental_results_load',
+            incremental_results = KubernetesPodOperator(task_id='incremental_results_load',
                                                             python_callable=self.inc_results,
                                                             do_xcom_push=True,
                                                             sla=timedelta(minutes=10))
@@ -492,30 +515,31 @@ class Director:
         return incremental_load_race
 
 
-    def inc_load_telem(self, dag, group_id, default_args):
+    def inc_load_telem(self):
         """This function calls the extract and load function to kick off the pipeline.
         Takes five arguments, the first first is a reference to the task instance to push the results to the airflow metadata database.
         The next three pertaining to the taskgroup initialization (dag, group_id and default_args), the next being the ETL orchestration class as a param, the last param being the decision of full load vs incremental load."""
         
-        from datetime import timedelta
-        from airflow.utils.task_group import TaskGroup
-        from airflow.operators.python import PythonOperator
+        import os
+        from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
+        from kubernetes.client import models as k8s
         
-            
-        with TaskGroup(group_id=group_id, default_args=default_args, dag=dag) as incremental_load_telem:
-
-            incremental_quali_telem = PythonOperator(task_id='incremental_quali_telem_load',
-                                                            python_callable=self.inc_quali_telem,
-                                                            do_xcom_push=True,
-                                                            sla=timedelta(minutes=10)
-                                                        )                                            
-
-            incremental_race_telem = PythonOperator(task_id='incremental_race_telem_load',
-                                                            python_callable=self.inc_race_telem,
-                                                            do_xcom_push=True,
-                                                            sla=timedelta(minutes=10))
-            
-        return incremental_load_telem
+                
+        inc_load_telem = KubernetesPodOperator( 
+            namespace="default",
+            image="nbroj/airflow-images:airflow-schedulerv1.0.0",
+            image_pull_secrets=[k8s.V1LocalObjectReference("")],
+            image_pull_policy='Never',
+            task_id="inc_load_telemetry",
+            command=["python","inc_telem.py"],
+            config_file=os.path.expanduser('~')+"/.kube/config",
+            do_xcom_push="no",
+            on_finish_action="delete_pod",
+            in_cluster= False,
+            get_logs=True,
+            deferrable=True
+        )
+        return inc_load_telem  
 
     def inc_load_pre_transf(self, dag, group_id, default_args):
         """This function calls the extract and load function to kick off the pipeline.
@@ -615,7 +639,7 @@ class Director:
         
         # accessing current context of running task instance to pull the tables which are to be compared to the existing database tables
         
-        logging.info("Loading dataframes stored within xcomms...")
+        logging.info("Loading dataframes stored within xcoms...")
         qualifying_table = ti.xcom_pull(key='qualifying_table', task_ids='load_db')
         results_table = ti.xcom_pull(key='results_table', task_ids='load_db')
         race_telem_table = ti.xcom_pull(key='race_telem_table', task_ids='load_db')

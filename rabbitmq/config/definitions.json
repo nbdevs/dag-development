@@ -1,8 +1,9 @@
 {
     "users": [
         {
-        "name" : "rabbit_adman",
-        "password" : "admin",
+        "name" : "rabbit_admin",
+
+        "password": "admin",
         "tags" : "administrator"
         }
     ],
@@ -13,7 +14,7 @@
     ],
     "permissions":[
         {
-            "user": "rabbit_adman",
+            "user": "rabbit_admin",
             "vhost" : "/",
             "configure" : ".*",
             "write":".*",

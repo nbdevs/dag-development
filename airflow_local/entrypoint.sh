@@ -83,7 +83,7 @@ if [ "$AIRFLOW__CORE__EXECUTOR" = "CeleryExecutor" ]; then
     RABBITMQ_PORT=$(echo -n "$RABBITMQ_PORT" | cut -d ':' -f2)
   fi
 
-  wait_for_port "rabbitmq" "$RABBITMQ_HOST" "$RABBITMQ_PORT"
+  wait_for_port "rabbitmq" "$RABBITMQ_HOST" "$RABBITMQ_PORT" 
 
 fi
 

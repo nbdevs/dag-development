@@ -1,4 +1,4 @@
-FROM python:3.9-slim-buster AS airflow-setup
+FROM python:3.11-slim-buster AS airflow-setup
 
 # adapted from label maintainer mac lamberti https://github.com/marclamberti/airflow-prod/blob/master/Dockerfile
 
@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND noninteractive
 ENV TERM linux
 
 # build arguments 
-ARG AIRFLOW_VERSION=2.6.3
+ARG AIRFLOW_VERSION=2.8.2
 ARG AIRFLOW_USER_HOME=/usr/local/airflow
 ENV AIRFLOW_HOME=${AIRFLOW_USER_HOME}
 ENV PATH="$AIRFLOW_HOME/.local/bin:$PATH"
@@ -33,11 +33,16 @@ RUN set -ex \
         libsasl2-dev \
         libssl-dev \
         libffi-dev \
+        krb5-user \
+        libffi6 \
         libgraphviz-dev \
         python3-dev \
         graphviz \
         pkg-config \
         libpq-dev \
+        lsb-release \
+        sasl2-bin \
+        unixodbc \
         git \
         gzip \
         gettext-base \
@@ -74,7 +79,7 @@ RUN set -ex \
 COPY --chown=airflow:root ./config/airflow.cfg ${AIRFLOW_USER_HOME}/
 COPY --chown=airflow:root ./dags ${AIRFLOW_USER_HOME}/dags
 COPY --chown=airflow:root ./logs ${AIRFLOW_USER_HOME}/logs
-COPY --chown=airflow:root ./requirements-py3.9.txt ${AIRFLOW_USER_HOME}/requirements-py3.9.txt
+COPY --chown=airflow:root ./requirements/requirements-py3.11.txt ${AIRFLOW_USER_HOME}/requirements-py3.11.txt
 COPY --chown=airflow:root ./cache ${AIRFLOW_USER_HOME}/cache
 COPY --chown=airflow:root ./dags/.airflowignore ${AIRFLOW_USER_HOME}/dags/.airflowignore
 
@@ -84,17 +89,17 @@ RUN chmod -R 777 ${AIRFLOW_USER_HOME}
 
 #copy entrypoint script to container and make executable 
 COPY --chown=airflow:root ./entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh 
 
 # switch to airflow user to bypass permissions in container 
 USER airflow
 
 # creating set up tools and wheels to create custom python packages
 # upgrade pip and install dependnencies needed to build pscyopg2 module 
-RUN pip3.9 install --no-cache-dir --upgrade pip
-RUN pip3.9 install --no-cache-dir setuptools wheel psycopg2 python-decouple fastf1
+RUN pip3.11 install --no-cache-dir --upgrade pip
+RUN pip3.11 install --no-cache-dir setuptools wheel psycopg2 python-decouple fastf1
 #install from requiremnts.txt to reduce the startup time for airflow scheduler, and install local packages to airflow image
-RUN pip3.9 install --no-cache-dir 'apache-airflow[postgres,celery,redis,amazon,sftp,ftp,http,sqlite,ssh,snowflake,celery,kubernetes,jdbc,s3,rabbitmq]'==${AIRFLOW_VERSION} --constraint ${AIRFLOW_USER_HOME}/requirements-py3.9.txt 
+RUN pip3.11 install --no-cache-dir 'apache-airflow[postgres,celery,redis,amazon,sftp,ftp,http,sqlite,ssh,snowflake,celery,kubernetes,jdbc,s3,rabbitmq]'==${AIRFLOW_VERSION} --constraint ${AIRFLOW_USER_HOME}/requirements-py3.11.txt 
 
 WORKDIR ${AIRFLOW_USER_HOME}
 

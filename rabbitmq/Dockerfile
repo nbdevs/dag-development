@@ -1,19 +1,24 @@
 FROM rabbitmq:3.11-management AS rabbitmq-setup
-WORKDIR /rabbitmq
+
+WORKDIR /var/lib/rabbitmq
+
+USER root
 
 # rabbitmq setup and configuration files
-COPY ./config/definitions.json /etc/rabbitmq/definitions.json
-COPY ./config/rabbitmq.conf /etc/rabbitmq/rabbitmq.conf 
-COPY ./logs /var/log/rabbitmq/log
+COPY --chown=rabbitmq:root ./config/definitions.json /etc/rabbitmq/definitions.json
+COPY --chown=rabbitmq:root ./config/rabbitmq.conf /etc/rabbitmq/rabbitmq.conf 
+COPY --chown=rabbitmq:root ./logs /etc/rabbitmq/local/rabbitmq
 
 # rabbit entrypoint script setup for users 
-ADD ./entrypoint.sh /entrypoint.sh
-ADD ./config.sh /config.sh
-RUN chmod +x /entrypoint.sh /config.sh
+COPY --chown=rabbitmq:root ./scripts /scripts
 
-# owner permissions 
-RUN chown rabbitmq:rabbitmq /etc/rabbitmq/rabbitmq.conf /etc/rabbitmq/definitions.json
+# changing owner permissions for logs, and config files
+RUN chown -R rabbitmq:root /scripts /etc/rabbitmq
+RUN chmod -R 777 /scripts /etc/rabbitmq
 
 EXPOSE 15672 5672
 
-ENTRYPOINT ["/entrypoint.sh"]
+#switch back to rabbimq user to bypass container permissions 
+USER rabbitmq
+
+ENTRYPOINT ["/scripts/entrypoint.sh"]

@@ -101,8 +101,9 @@ Ongoing development, major changes planned which will provide extra functionalit
 
 Pending:
 
-- [ ] ETL functionality for Data Warehouse
-- [ ] Data visualisation dashboards for Telemetry, Race, Season
+- [ ] ETL functionality for Telemetry Grain
+- [ ] ETL Functionality into Data Warehouse.
+- [ ] Data visualisation dashboards for Telemetry Grain.
 
 ## License
 

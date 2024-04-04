@@ -2,14 +2,16 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator, ShortCircuitOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
+from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
+from airflow.models import Pool
 
 from processor import DatabaseETL, WarehouseETL
 from director import Director
 from connections import PostgresClient, PostgresConnection
 from colours import Colours
-
+ 
 # Initializing global variables for duration of data collection
-start_date = 2019 # telemetry data only available from 2019 onwards for races
+start_date = 2018 # telemetry data only available from 2019 onwards for races
 end_date = 2023
 
 # Instantiating classes used within the ETL process
@@ -25,19 +27,27 @@ default_args = {
     'schedule_interval': 'None', # change this back to weekly after 
     'catchup_by_default': False,
     'do_xcom_push': True,
-    'retries':1,
+    'retries': 1,
     'provide_context': True, 
     'retry_delay': timedelta(minutes=1),
     'owner': 'airflow',
     'queue': 'rabbit.db'
 }
 
+# Create pool for telemetry granularity
+telemetry_pool= Pool.create_or_update_pool(
+    "telemetry_pool",
+    slots=128,
+    description="Pool for telemetry loading tasks.",
+    include_deferred=True
+)
+
 # Defining DAGs and tasks
 with DAG(
         dag_id='database_etl',
         default_args=default_args,
         render_template_as_native_obj=True,
-        dagrun_timeout=timedelta(minutes=600)) as db_etl:
+        dagrun_timeout=timedelta(minutes=1000)) as db_etl:
     
     retrieve_extraction_type = PythonOperator(
         task_id='retrieve_extract_type',
@@ -58,14 +68,14 @@ with DAG(
     
     full_extraction_load_race = db_director.full_load_race(db_etl, 'full_ext_load_race', default_args)
     
-    full_extraction_load_telemetry = db_director.full_load_telemetry(db_etl, 'full_ext_load_telemetry', default_args)
-    
+    full_extraction_load_telemetry = db_director.full_load_telemetry() # resource heavy tasks using kubernetespodoperator 
+
     full_extraction_load_pre_transf = db_director.full_load_pre_transformation(db_etl, 'full_ext_load_pt', default_args)
     
     # incremental load task groups 
     incremental_extraction_load_race = db_director.inc_load_race(db_etl, 'incremental_ext_load_race', default_args)
     
-    incremental_extraction_load_telem = db_director.inc_load_telem(db_etl, 'incremental_ext_load_telem', default_args)
+    incremental_extraction_load_telem = db_director.inc_load_telem() # resource heavy tasks using kubernetespodoperator 
     
     incremental_extraction_load_pre_transf = db_director.inc_load_pre_transf(db_etl, 'incremental_ext_load_pt', default_args)
 
