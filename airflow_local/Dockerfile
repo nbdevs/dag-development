@@ -79,7 +79,7 @@ RUN set -ex \
 COPY --chown=airflow:root ./config/airflow.cfg ${AIRFLOW_USER_HOME}/
 COPY --chown=airflow:root ./dags ${AIRFLOW_USER_HOME}/dags
 COPY --chown=airflow:root ./logs ${AIRFLOW_USER_HOME}/logs
-COPY --chown=airflow:root ./requirements/requirements-py3.11.txt ${AIRFLOW_USER_HOME}/requirements-py3.11.txt
+COPY --chown=airflow:root ./requirements ${AIRFLOW_USER_HOME}/requirements
 COPY --chown=airflow:root ./cache ${AIRFLOW_USER_HOME}/cache
 COPY --chown=airflow:root ./dags/.airflowignore ${AIRFLOW_USER_HOME}/dags/.airflowignore
 
@@ -99,7 +99,7 @@ USER airflow
 RUN pip3.11 install --no-cache-dir --upgrade pip
 RUN pip3.11 install --no-cache-dir setuptools wheel psycopg2 python-decouple fastf1
 #install from requiremnts.txt to reduce the startup time for airflow scheduler, and install local packages to airflow image
-RUN pip3.11 install --no-cache-dir 'apache-airflow[postgres,celery,redis,amazon,sftp,ftp,http,sqlite,ssh,snowflake,celery,kubernetes,jdbc,s3,rabbitmq]'==${AIRFLOW_VERSION} --constraint ${AIRFLOW_USER_HOME}/requirements-py3.11.txt 
+RUN pip3.11 install --no-cache-dir 'apache-airflow[postgres,celery,redis,amazon,sftp,ftp,http,sqlite,ssh,snowflake,celery,kubernetes,jdbc,s3,rabbitmq]'==${AIRFLOW_VERSION} --constraint ${AIRFLOW_USER_HOME}/requirements/requirements-py3.11.txt 
 
 WORKDIR ${AIRFLOW_USER_HOME}
 
