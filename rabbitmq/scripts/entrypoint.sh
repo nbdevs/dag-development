@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # run in tandem preconfig file and rabbitmq
-/config.sh &
+/scripts/config.sh &
 
 # launching rabbitmq 
 exec rabbitmq-server
