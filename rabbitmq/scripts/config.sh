@@ -19,9 +19,6 @@ for (( ; ; )) ; do
   fi
 done
 
-# initialising two extra users for virtual views
-rabbitmqctl change_password rabbit_admin ${NEW_PASS_RABBIT_ADMIN}
-
 # creating db user, tags and setting permissions
 rabbitmqctl add_user $RABBITMQ_USER2 $RABBITMQ_PASSWORD2 2>/dev/null ; \
 rabbitmqctl set_user_tags $RABBITMQ_USER2 "administrator" ; \
