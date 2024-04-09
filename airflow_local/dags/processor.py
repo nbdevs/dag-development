@@ -452,7 +452,7 @@ class DatabaseETL(Processor):
 
         return
 
-    def serialize_full(self, **args):
+    def serialize_full(self, *args):
         """ This method is responsible for serializing the files into csv format before they are uploaded in raw form to an s3 bucket for persistence."""
         import logging
         from datetime import datetime
