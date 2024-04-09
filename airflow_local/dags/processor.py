@@ -452,7 +452,7 @@ class DatabaseETL(Processor):
 
         return
 
-    def serialize_full(self, **arg):
+    def serialize_full(self, **args):
         """ This method is responsible for serializing the files into csv format before they are uploaded in raw form to an s3 bucket for persistence."""
         import logging
         from datetime import datetime
@@ -467,13 +467,13 @@ class DatabaseETL(Processor):
         # directory which the processed csv files are output to as a result of this function
         processed_dir = config("user_home")
 
-        if arg[3] == 1:  # full load
+        if args[3] == 1:  # full load
 
-            dataframes = [arg[0], arg[1], arg[2]]
+            dataframes = [args[0], args[1], args[2]]
 
-        elif arg[3] == 2:  # full telemetry load
+        elif args[3] == 2:  # full telemetry load
 
-            dataframes = [arg[4], arg[5]]
+            dataframes = [args[4], args[5]]
 
         # converting dataframe to csv and storing in specified location
         self.csv_producer(processed_dir, extract_dt, dataframes)
