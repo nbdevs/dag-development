@@ -2,7 +2,8 @@
     "users": [
         {
         "name" : "rabbit_admin",
-        "password": "admin",
+        "password_hash": "YI2wJkGpmXCzG1So/s/jHVyI/M4VSTTfgdvgD371hymOy+v4vR6blhM6nKUX81wNkKsWGLhLmTzEVQQImT6CQ24QhvI=",
+        "hashing_algorithm": "rabbit_password_hashing_512",
         "tags" : "administrator"
         }
     ],
