@@ -6,7 +6,7 @@ from colours import Colours
 
 # --------------------------------------------------------------------------------------------------
 
- 
+
 class Processor(ABC):
     """ Processor interface which creating different forms of data tables representing formula 1 data for the 3 different grains 
     in the system, aggregates them accordingly and passes the result to airflow to store in x-coms.
@@ -506,10 +506,10 @@ class DatabaseETL(Processor):
 
         # setting extract parameters
         if self.validate_pathway_file(path) == 'Full':
-            extract_dt = ti.xcoms_pull(
+            extract_dt = ti.xcom_pull(
                 task_ids='full_load_serialization', key='extract_date')
         elif self.validate_pathway_file(path) == 'Incremental':
-            extract_dt = ti.xcoms_pull(
+            extract_dt = ti.xcom_pull(
                 task_ids='inc_load_serialization', key='incremental_extract_date')
 
         dt_format = self._dt_format
@@ -670,10 +670,10 @@ class DatabaseETL(Processor):
 
         # setting extract parameters
         if self.validate_pathway_file(path) == 'Full':
-            extract_dt = ti.xcoms_pull(
+            extract_dt = ti.xcom_pull(
                 task_ids='full_load_serialization', key='extract_date')
         elif self.validate_pathway_file(path) == 'Incremental':
-            extract_dt = ti.xcoms_pull(
+            extract_dt = ti.xcom_pull(
                 task_ids='inc_load_serialization', key='incremental_extract_date')
 
         # getting season year from extract_dt param
@@ -975,10 +975,10 @@ class DatabaseETL(Processor):
 
         # setting extract parameters
         if self.validate_pathway_file(path) == 'Full':
-            extract_dt = ti.xcoms_pull(
+            extract_dt = ti.xcom_pull(
                 task_ids='full_load_serialization', key='extract_date')
         elif self.validate_pathway_file(path) == 'Incremental':
-            extract_dt = ti.xcoms_pull(
+            extract_dt = ti.xcom_pull(
                 task_ids='inc_load_serialization', key='incremental_extract_date')
 
         # getting season year variable from extract_dt param
@@ -1527,7 +1527,7 @@ class WarehouseETL(Processor):
 
     def is_not_empty(self, s):
         pass
-    
+
     def csv_producer(self, user_home, extract_dt, dataframes):
         pass
 
