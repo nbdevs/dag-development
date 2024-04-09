@@ -20,14 +20,14 @@ for (( ; ; )) ; do
 done
 
 # creating db user, tags and setting permissions
-rabbitmqctl add_user $RABBITMQ_USER2 $RABBITMQ_PASSWORD2 2>/dev/null ; \
-rabbitmqctl set_user_tags $RABBITMQ_USER2 "administrator" ; \
-rabbitmqctl set_permissions -p / $RABBITMQ_USER2  ".*" ".*" ".*" ; \
+rabbitmqctl add_user $RABBITMQ_USER $RABBITMQ_PASSWORD 2>/dev/null ; \
+rabbitmqctl set_user_tags $RABBITMQ_USER "administrator" ; \
+rabbitmqctl set_permissions -p / $RABBITMQ_USER ".*" ".*" ".*" ; \
 
 # creating dw user, tags and setting permissions
-rabbitmqctl add_user $RABBITMQ_USER3 $RABBITMQ_PASSWORD3 2>/dev/null ; \
-rabbitmqctl set_user_tags $RABBITMQ_USER3 "administrator" ; \
-rabbitmqctl set_permissions -p / $RABBITMQ_USER3  ".*" ".*" ".*" ; \
+rabbitmqctl add_user $RABBITMQ_USER2 $RABBITMQ_PASSWORD2 2>/dev/null ; \
+rabbitmqctl set_user_tags $RABBITMQ_USER2 "administrator" ; \
+rabbitmqctl set_permissions -p / $RABBITMQ_USER2 ".*" ".*" ".*" ; \
 
 rabbitmq-plugins enable rabbitmq_management
 
