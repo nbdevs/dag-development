@@ -174,10 +174,10 @@ class PostgresClient(AbstractClient):
                     logging.error("Error writing data to table.")
                 finally: 
                     pg_connection.close()
-        
+    
         return
         
-    def changed_data_capture(self, conn, extract_dt, results_table, qualifying_table, race_telem_table, quali_telem_table):
+    def changed_data_capture(self, conn, extract_dt, inc_processed_dir):
         """ Check the database tables for new rows to insert these ones only. 
             This is a function aimed for incremental updates of race data"""
            
@@ -190,8 +190,15 @@ class PostgresClient(AbstractClient):
         pg_cursor = pg_connection.cursor()
         
         #export table to csv then convert to dataframes 
-        #compare table data to new dataframe which diff/merge/compare function
-        #extract the new data only from new dataframe if any and then upsert into database tables. 
+        #compare table data to new dataframe with diff/merge/compare function
+        #extract the new data only from the new dataframe if there is any 
+        #call short circuit opertaor if no new data, but if new THEN
+        
+        #if new data then return 1 AND
+        #  upsert these into database tables with upsert_db function
+        
+        #else if no new data return 0 AND
+        # short circuit dag cycle
         
         pass
       
