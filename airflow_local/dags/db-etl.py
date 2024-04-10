@@ -84,7 +84,7 @@ with DAG(
     )
     
     changed_data_detected = PythonOperator(task_id='changed_data_detected',
-                                           python_callable=db_director.changed_data_detect,
+                                           python_callable=db_director.changed_data_detected,
                                            sla=timedelta(minutes=15)
     )
 
