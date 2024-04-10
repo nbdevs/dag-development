@@ -60,15 +60,7 @@ class Processor(ABC):
         pass
 
     @abstractmethod
-    def csv_producer(self, user_home, extract_dt, dataframes):
-        pass
-
-    @abstractmethod
-    def serialize_full(self, **arg) -> datetime:
-        pass
-
-    @abstractmethod
-    def increment_serialize(self, qualifying_table, results_table, race_telem_table, quali_telem_table, ti) -> datetime:
+    def csv_producer(self, csv_dir, extract_dt, dataframes,  table_name, extract_type):
         pass
 
     @abstractmethod
@@ -102,7 +94,6 @@ class Processor(ABC):
     @abstractmethod
     def create_championship_views(self, postgres_uri) -> None:
         pass
-
 
 class DatabaseETL(Processor):
     """Follows the implementation details provided in the interface in order to build the dataframe in the specified manner needed for the respective data grain.
@@ -142,7 +133,6 @@ class DatabaseETL(Processor):
         Args:
             file (textfile): pathway script which monitors the load pathway taken.
         """
-        import os
         import logging
 
         pathway_array = []
@@ -420,65 +410,31 @@ class DatabaseETL(Processor):
 
         return race_table
 
-    def csv_producer(self, user_home, extract_dt, dataframes):
-        """ """
+    def csv_producer(self, csv_dir, extract_dt, dataframe, table_name, extract_type):
+        """
+        This function generates the CSV files for the tabled data for all season, race and telemetry level of granularity.
+        Takes 5 inputs, one being the user home directory which is a reference to the location the csv files will be stored, 
+        extract date which attaches the date fo data extraction to the end of the cv file
+        dataframe which refers to the pandas dataframe containing the data
+        table_name which refers to the database table name of the data,
+        extract_type which refers to whether this is occurring on a full or incremental load."""
 
-        i = 0  # counter variable
-
-        # append date to the end of the files, and output to the correct directory
-        for d in dataframes:
-
-            i += 1  # increment counter
-
-            if i == 1:
-                d.to_csv('{}/cache/FullProcessed/Results{}.csv'.format(user_home,
-                         extract_dt), index=False, header=True)
-
-            elif i == 2:
-                d.to_csv('{}/cache/FullProcessed/Qualifying{}.csv'.format(user_home,
-                         extract_dt), index=False, header=True)
-
-            elif i == 3:
-                d.to_csv('{}/cache/FullProcessed/Season{}.csv'.format(user_home,
-                         extract_dt), index=False, header=True)
-
-            elif i == 4:
-                d.to_csv('{}/cache/FullProcessed/RaceTelem{}.csv'.format(user_home,
-                         extract_dt), index=False, header=True)
-
-            elif i == 5:
-                d.to_csv('{}/cache/FullProcessed/QualifyingTelem{}.csv'.format(
-                    user_home, extract_dt), index=False, header=True)
-
+        if table_name == "Results":
+            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(csv_dir, extract_type, table_name,
+                        extract_dt), index=False, header=True)
+        elif table_name == "Qualifying":
+            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(csv_dir, extract_type, table_name,
+                        extract_dt), index=False, header=True)
+        elif table_name == "Season":
+            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(csv_dir, extract_type, table_name,
+                extract_dt), index=False, header=True)
+        elif table_name == "RaceTelem":
+            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(csv_dir, extract_type, table_name,
+                        extract_dt), index=False, header=True)
+        elif table_name == "QualifyingTelem":
+            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(csv_dir, extract_type, table_name,
+                        extract_dt), index=False, header=True)
         return
-
-    def serialize_full(self, *args):
-        """ This method is responsible for serializing the files into csv format before they are uploaded in raw form to an s3 bucket for persistence."""
-        import logging
-        from datetime import datetime
-        from decouple import config
-
-        logging.info(
-            "------------------------------Serializing DataFrames to CSV--------------------------------------")
-
-        extract_dt = datetime.today().strftime(
-            "%Y-%m-%d")  # date stamp for record keeping
-
-        # directory which the processed csv files are output to as a result of this function
-        processed_dir = config("user_home")
-
-        if args[3] == 1:  # full load
-
-            dataframes = [args[0], args[1], args[2]]
-
-        elif args[3] == 2:  # full telemetry load
-
-            dataframes = [args[4], args[5]]
-
-        # converting dataframe to csv and storing in specified location
-        self.csv_producer(processed_dir, extract_dt, dataframes)
-
-        return extract_dt  # return the date to push to xcoms for s3 hook to identify the file by the date for uploading into postgres
 
     def incremental_qualifying(self, ti):
         """This function handles the incremental extraction of qualifying data into the database.
@@ -1123,52 +1079,6 @@ class DatabaseETL(Processor):
 
         return race_telemetry_table
 
-    def increment_serialize(self, qualifying_table, results_table, race_telem_table, quali_telem_table):
-        """ """
-
-        import logging
-        from datetime import datetime
-        from decouple import config
-        import pandas as pd
-
-        logging.info(
-            "------------------------------Serializing DataFrames to CSV--------------------------------------")
-
-        extract_dt = datetime.today().strftime("%Y-%m-%d")
-
-        dataframes = [qualifying_table, results_table]
-        arrays = [race_telem_table, quali_telem_table]
-        user_home = config("user_home")
-
-        i = 0  # counter variable
-        j = 0
-        # append date to the end of the files, and output to the correct directory
-        for d in dataframes:
-
-            i += 1  # increment counter
-
-            if i == 1:
-                d.to_csv('Users/{}/cache/IncrementalProcessed/Qualifying{}.csv'.format(
-                    user_home, extract_dt), index=False, header=True)
-
-            elif i == 2:
-                d.to_csv('Users/{}/cache/IncrementalProcessed/Results{}.csv'.format(
-                    user_home, extract_dt), index=False, header=True)
-
-        for a in arrays:  # need to change this to handle string arrays and convert them to csv
-            j += 1
-            if j == 1:
-                df = pd.DataFrame(a)
-                df.to_csv('/Users/{}/cache/IncrementalProcessed/RaceTelem{}.csv'.format(
-                    user_home, extract_dt), index=False, header=True)
-
-            elif j == 2:
-                df = pd.DatFrame(a)
-                df.to_csv('/Users/{}/cache/IncrementalProcessed/QualifyingTelem{}.csv'.format(
-                    user_home, extract_dt), index=False, header=True)
-
-        return extract_dt
-
     def extract_quali_telem(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         """ Full load of telemetry data for qualifying for each event of the race calendar.
             Takes the cache directory, start and end date for data load as parameters, and returns a dataframe."""
@@ -1560,13 +1470,7 @@ class WarehouseETL(Processor):
 
     def incremental_race_telem(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         pass
-
-    def serialize_full(self, user_home, race_table, driver_table, season_table, race_telem_table, quali_telem_table) -> datetime:
-        pass
-
-    def increment_serialize(self, qualifying_table, results_table, race_telem_table, quali_telem_table, ti) -> datetime:
-        pass
-
+    
     def postgres_transformations(self) -> None:
         pass
 
