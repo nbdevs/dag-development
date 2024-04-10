@@ -410,7 +410,7 @@ class DatabaseETL(Processor):
 
         return race_table
 
-    def csv_producer(self, csv_dir, extract_dt, dataframe, table_name, extract_type):
+    def csv_producer(self, user_home, extract_dt, dataframe, table_name, extract_type):
         """
         This function generates the CSV files for the tabled data for all season, race and telemetry level of granularity.
         Takes 5 inputs, one being the user home directory which is a reference to the location the csv files will be stored, 
@@ -420,19 +420,19 @@ class DatabaseETL(Processor):
         extract_type which refers to whether this is occurring on a full or incremental load."""
 
         if table_name == "Results":
-            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(csv_dir, extract_type, table_name,
+            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(user_home, extract_type, table_name,
                         extract_dt), index=False, header=True)
         elif table_name == "Qualifying":
-            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(csv_dir, extract_type, table_name,
+            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(user_home, extract_type, table_name,
                         extract_dt), index=False, header=True)
         elif table_name == "Season":
-            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(csv_dir, extract_type, table_name,
+            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(user_home, extract_type, table_name,
                 extract_dt), index=False, header=True)
         elif table_name == "RaceTelem":
-            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(csv_dir, extract_type, table_name,
+            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(user_home, extract_type, table_name,
                         extract_dt), index=False, header=True)
         elif table_name == "QualifyingTelem":
-            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(csv_dir, extract_type, table_name,
+            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(user_home, extract_type, table_name,
                         extract_dt), index=False, header=True)
         return
 
