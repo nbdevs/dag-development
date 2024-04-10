@@ -42,6 +42,7 @@ class Director:
         # stores the csv files for incremental load
         self._inc_processed_dir = config("inc_processed_dir")
         self._pathway = config("pathway")
+        self._user_home_dir = config("user_home")
 
     def retrieve_extract_type(self, ti):
         """This function determines the extract format of the load cycle.
@@ -98,7 +99,7 @@ class Director:
             self._fl_season_dir, self._start_date, self._end_date)
         
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._full_processed_dir, extract_dt, season_table, "Season", "Full") # function call to store csv file of dataframe content
+        self._db_builder.csv_producer(self._user_home_dir, extract_dt, season_table, "Season", "Full") # function call to store csv file of dataframe content
 
         return
 
@@ -118,7 +119,7 @@ class Director:
         qualifying_table = self._db_builder.extract_qualifying_grain(
             self._fl_qualifying_dir, self._start_date, self._end_date)
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._full_processed_dir, extract_dt, qualifying_table, "Qualifying", "Full") # function call to store csv file of dataframe content
+        self._db_builder.csv_producer(self._user_home_dir, extract_dt, qualifying_table, "Qualifying", "Full") # function call to store csv file of dataframe content
 
         return
 
@@ -138,7 +139,7 @@ class Director:
         results_table = self._db_builder.extract_race_grain(
             self._fl_results_dir, self._start_date, self._end_date)
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._full_processed_dir, extract_dt, results_table, "Results", "Full") # function call to store csv file of dataframe content
+        self._db_builder.csv_producer(self._user_home_dir, extract_dt, results_table, "Results", "Full") # function call to store csv file of dataframe content
 
         # pushing extract date value to xcoms
         ti.xcom_push(key='extract_date', value=extract_dt)
@@ -162,7 +163,7 @@ class Director:
         race_telem_table = self._db_builder.extract_race_telem(
             self._fl_telem_dir, self._start_date, self._end_date)
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._full_processed_dir, extract_dt, race_telem_table, "RaceTelemetry", "Full") # function call to store csv file of dataframe content
+        self._db_builder.csv_producer(self._user_home_dir, extract_dt, race_telem_table, "RaceTelemetry", "Full") # function call to store csv file of dataframe content
 
         return 
 
@@ -184,7 +185,7 @@ class Director:
             self._fl_telem_dir, self._start_date, self._end_date)
         
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._full_processed_dir, extract_dt, quali_telem_table, "QualifyingTelemetry", "Full") # function call to store csv file of dataframe content
+        self._db_builder.csv_producer(self._user_home_dir, extract_dt, quali_telem_table, "QualifyingTelemetry", "Full") # function call to store csv file of dataframe content
         
         # pushing extract date value to xcoms
         ti.xcom_push(key='extract_date', value=extract_dt)
@@ -229,7 +230,7 @@ class Director:
             ti, self._inc_qualifying_dir)
         
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._inc_processed_dir, extract_dt, qualifying_table, "Qualifying", "Incremental") # function call to store csv file of dataframe content
+        self._db_builder.csv_producer(self._user_home_dir, extract_dt, qualifying_table, "Qualifying", "Incremental") # function call to store csv file of dataframe content
         # pushing extract date value to xcoms
         ti.xcom_push(key='incremental_extract_date', value=extract_dt)
  
@@ -251,7 +252,7 @@ class Director:
         # outputs the dataframe for the race result data to be stored in xcoms
         results_table = self._db_builder.incremental_results(ti, self._inc_results_dir)
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._inc_processed_dir, extract_dt, results_table, "Results", "Incremental") # function call to store csv file of dataframe content
+        self._db_builder.csv_producer(self._user_home_dir, extract_dt, results_table, "Results", "Incremental") # function call to store csv file of dataframe content
         
         return
 
@@ -272,7 +273,7 @@ class Director:
         quali_telem_table = self._db_builder.incremental_quali_telem(
             self._inc_quali_dir, start_date, end_date)
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._inc_processed_dir, extract_dt, quali_telem_table, "QualifyingTelemetry", "Incremental") # function call to store csv file of dataframe content
+        self._db_builder.csv_producer(self._user_home_dir, extract_dt, quali_telem_table, "QualifyingTelemetry", "Incremental") # function call to store csv file of dataframe content
 
         return 
 
@@ -293,7 +294,7 @@ class Director:
         race_telem_table = self._db_builder.incremental_race_telem(
             ti, self._inc_racetelem_dir)
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._inc_processed_dir, extract_dt, race_telem_table, "RaceTelemetry", "Incremental") # function call to store csv file of dataframe content
+        self._db_builder.csv_producer(self._user_home_dir, extract_dt, race_telem_table, "RaceTelemetry", "Incremental") # function call to store csv file of dataframe content
         
         return 
 
