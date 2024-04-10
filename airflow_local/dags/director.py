@@ -43,28 +43,6 @@ class Director:
         self._inc_processed_dir = config("inc_processed_dir")
         self._pathway = config("pathway")
 
-    def change_data_detected(self, ti, qualifying_table, results_table, race_telem_table, quali_telem_table, extract_dt):
-        """ This function follows on from the incremental pathway of the load_db function, after new change data is detected which needs to be reflected in the database.
-        If changed data has been detected and the dag run has not been short circuited by the operator then this 
-        function serializes and pushes the new data into the database.
-        Takes a task instance object as a reference."""
-
-        import logging
-
-        logging.info("Creating new postgres connection...")
-
-        # initializing postgres client
-        postgres_client = self._postgres
-        # calling connection method to get connection string with 1 specified for the database developer privileges
-        postgres_conn_uri = postgres_client.connection_factory(1, self._col,)
-        logging.info("Upserting data into Postgres")
-
-        # initializing postgres client
-        postgres_client.upsert_db(
-            postgres_conn_uri, ti, self._inc_processed_dir, self._full_processed_dir, extract_dt)
-
-        return
-
     def retrieve_extract_type(self, ti):
         """This function determines the extract format of the load cycle.
         Takes two arguments, the ETL class that directs the tasks within pipeline, and a reference to a task instance for pushing results
@@ -546,8 +524,9 @@ class Director:
         import logging
 
         extract_dt = ti.xcom_pull(task_ids="inc_ext_load_race", key="incremental_extract_dt")
-        # creating the postgres conn uri by calling the function from the client.
-        pg_conn_uri = self._postgres.get_connection_id(self._pg_conn)
+        logging.info("Creating new postgres connection...")
+        pg_conn_uri = self._postgres.get_connection_id(self._pg_conn) # creating the postgres conn uri by calling the function from the client.
+        logging.info("Comparing new data to existing data in database...")
         contains_new_data = self._postgres.changed_data_capture(
             pg_conn_uri, extract_dt, self._inc_processed_dir)
 
@@ -560,9 +539,12 @@ class Director:
         
         """ this function upserts new data into the database after successfully clearing the short circuit operator
         """
+        import logging
         
         #pull the extract date from the last loaded body of data 
         ti.xcom_pull(task_ids="", key="")
-        
+        logging.info("Creating new postgres connection...")
         pg_conn_uri = self._postgres.get_connection_id(self._pg_conn)
+        logging.info("Upserting data into Postgres")
+
         self._postgres.upsert_db(pg_conn_uri, ti, self._inc_processed_dir, self._inc_full_processed_dir, extract_dt)

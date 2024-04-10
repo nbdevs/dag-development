@@ -79,7 +79,7 @@ with DAG(
     incremental_extraction_load_pre_transf = db_director.inc_load_pre_transf(db_etl, 'incremental_ext_load_pt', default_args)
 
     change_data_capture = ShortCircuitOperator(task_id='change_data_capture',
-                                               python_callable=db_director.changed_data_capture,
+                                               python_callable=db_director.changed_data_handler,
                                                sla=timedelta(minutes=20)                        
     )
     
