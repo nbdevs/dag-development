@@ -30,17 +30,18 @@ class Director:
         # env variable for directory to store cache for full load telemetry
         self._fl_telem_dir = config("telemetry")
         # env variable for directory to store cache for results
-        self._inc_results = config("inc_results")
+        self._inc_results_dir = config("inc_results")
         # env variable for directory to store cache for incremental qualifying
-        self._inc_qualifying = config("inc_qualifying")
+        self._inc_qualifying_dir = config("inc_qualifying")
         # env variable for directory to store cache for incremental quali telemetry
-        self._inc_qualitelem = config("inc_qualitelem")
+        self._inc_qualitelem_dir = config("inc_qualitelem")
         # env variable for directory to store cache for incremental race telemetry
-        self._inc_racetelem = config("inc_racetelem")
+        self._inc_racetelem_dir = config("inc_racetelem")
         # stores the csv files for full load
         self._full_processed_dir = config("full_processed_dir")
         # stores the csv files for incremental load
         self._inc_processed_dir = config("inc_processed_dir")
+        self._pathway = config("pathway")
 
     def change_data_detected(self, ti, qualifying_table, results_table, race_telem_table, quali_telem_table, extract_dt):
         """ This function follows on from the incremental pathway of the load_db function, after new change data is detected which needs to be reflected in the database.
@@ -64,20 +65,13 @@ class Director:
 
         return
 
-    # Creating functions to be used for dag callables
-
     def retrieve_extract_type(self, ti):
         """This function determines the extract format of the load cycle.
         Takes two arguments, the ETL class that directs the tasks within pipeline, and a reference to a task instance for pushing results
         to the airflow metadata database."""
 
-        from decouple import config
-
-        # path to file on linux machine
-        pathway = config("pathway")
-
         # determining if incremental or full load is necessary
-        extract_type = self._db_builder.determine_format(pathway)
+        extract_type = self._db_builder.determine_format(self._pathway)
         # accessing current context of running task instance
         ti.xcom_push(key='extract_format', value=extract_type)
 
@@ -88,7 +82,6 @@ class Director:
         value."""
 
         # accessing current context of running task instance
-
         extract_type = ti.xcom_pull(
             key='extract_format', task_ids='retrieve_extract_type')
 
@@ -116,17 +109,20 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-        from decouple import config
+        from datetime import datetime
+
+        # variable initialisation
+        extract_dt = datetime.today().strftime("%Y-%m-%d")  # date stamp for record keeping 
 
         # folder for cache for season data
         season_cache = config("season")
         logging.info("Extracting Aggregated Season Data...")
         # outputs aggregated season data as dataframe to be pushed to xcoms
         season_table = self._db_builder.extract_season_grain(
-            season_cache, self._start_date, self._end_date)
-
-        # accessing current context of running task instance
-        ti.xcom_push(key='season_table', value=season_table)
+            self._fl_season_dir, self._start_date, self._end_date)
+        
+        logging.info("Serialising dataframe to CSV...")
+        self._db_builder.csv_producer(self._full_processed_dir, extract_dt, season_table, "Season", "Full") # function call to store csv file of dataframe content
 
         return
 
@@ -136,17 +132,17 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-        from decouple import config
+        from datetime import datetime
 
-        # cache folder for qualifying folder
-        qualifying_cache = config("qualifying")
+        # variable initialisation
+        extract_dt = datetime.today().strftime("%Y-%m-%d")  # date stamp for record keeping 
+
         logging.info("Extracting Aggregated Qualifying Data...")
         # outputs aggregated qualifying data as dataframe to be pushed to xcoms
         qualifying_table = self._db_builder.extract_qualifying_grain(
-            qualifying_cache, self._start_date, self._end_date)
-
-        # accessing current context of running task instance
-        ti.xcom_push(key='qualifying_table', value=qualifying_table)
+            self._fl_qualifying_dir, self._start_date, self._end_date)
+        logging.info("Serialising dataframe to CSV...")
+        self._db_builder.csv_producer(self._full_processed_dir, extract_dt, qualifying_table, "Qualifying", "Full") # function call to store csv file of dataframe content
 
         return
 
@@ -156,17 +152,20 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-        from decouple import config
+        from datetime import datetime
+ 
+        # variable initialisation
+        extract_dt = datetime.today().strftime("%Y-%m-%d")  # date stamp for record keeping 
 
-        # cache folder for results cache
-        results_cache = config("results")
         logging.info("Extracting Aggregated Results Data...")
         # outputs dataframe containing aggregated results table which will be pushed to xcom
         results_table = self._db_builder.extract_race_grain(
-            results_cache, self._start_date, self._end_date)
+            self._fl_results_dir, self._start_date, self._end_date)
+        logging.info("Serialising dataframe to CSV...")
+        self._db_builder.csv_producer(self._full_processed_dir, extract_dt, results_table, "Results", "Full") # function call to store csv file of dataframe content
 
-        # accessing current context of running task instance
-        ti.xcom_push(key='results_table', value=results_table)
+        # pushing extract date value to xcoms
+        ti.xcom_push(key='extract_date', value=extract_dt)
 
         return
 
@@ -176,17 +175,20 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-        from decouple import config
+        from datetime import datetime
 
-        # cache folder for telemetry data
-        telem_cache = config("telemetry")
+        # variable initialisation
+        extract_dt = datetime.today().strftime("%Y-%m-%d")  # date stamp for record keeping 
+
         logging.info("Extracting Aggregated Race Telemetry Data...")
 
         # outputs dataframe containing all the aggregated race telem data to be outputted to xcoms.
         race_telem_table = self._db_builder.extract_race_telem(
-            telem_cache, self._start_date, self._end_date)
+            self._fl_telem_dir, self._start_date, self._end_date)
+        logging.info("Serialising dataframe to CSV...")
+        self._db_builder.csv_producer(self._full_processed_dir, extract_dt, race_telem_table, "RaceTelemetry", "Full") # function call to store csv file of dataframe content
 
-        return race_telem_table
+        return 
 
     def full_load_quali_telem(self, ti):
         """ This function generates the tabled data for the telemetry level of granularity for F1 races.
@@ -194,44 +196,24 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-        from decouple import config
-
-        # cache folder for telemetry data
-        telem_cache = config("telemetry")
+        from datetime import datetime
+ 
+        # variable initialisation
+        extract_dt = datetime.today().strftime("%Y-%m-%d")  # date stamp for record keeping 
+   
         logging.info("Extracting Aggregated Qualifying Telemetry Data...")
 
         # outputs the dataframe for the qualifying data
         quali_telem_table = self._db_builder.extract_quali_telem(
-            telem_cache, self._start_date, self._end_date)
-
-        return quali_telem_table
-
-    def full_load_serialize(self, ti):
-        """ This function generates the CSV files for the tabled data for all season and race level of granularity.
-        Takes two inputs, one being the db_handler which is a reference to the processor class, and 
-        a ti argument for a reference to the task instance of the current running instance"""
-
-        import logging
-        from decouple import config
-
-        logging.info("Serializing pandas Tables into CSV...")
-
-        # pulling data for respective tables
-        results_table = ti.xcom_pull(
-            task_ids='full_results_load', key='results_table')
-        qualifying_table = ti.xcom_pull(
-            task_ids='full_qualifying_load', key='qualifying_table')
-        season_table = ti.xcom_pull(
-            task_ids='full_season_load', key='season_table')
-
-        # creates the extract date after the function is executed which will be pushed to xcoms, pathway for full load batch
-        extract_dt = self._db_builder.serialize_full(
-            results_table, qualifying_table, season_table, 1)
-
+            self._fl_telem_dir, self._start_date, self._end_date)
+        
+        logging.info("Serialising dataframe to CSV...")
+        self._db_builder.csv_producer(self._full_processed_dir, extract_dt, quali_telem_table, "QualifyingTelemetry", "Full") # function call to store csv file of dataframe content
+        
         # pushing extract date value to xcoms
         ti.xcom_push(key='extract_date', value=extract_dt)
 
-        return
+        return 
 
     def full_load_upsert(self, ti):
         """ This function upserts the CSV data into the staging  database tables ready to be transformed into the production 3nf tables. 
@@ -239,13 +221,8 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-        from decouple import config
-
-        # cache folder for incremental and full pathway processed csv files containing table data
-        incremental_dir = config("inc_processed_dir")
-        full_dir = config("full_processed_dir")
-
-        logging.info("Upserting data into Postgres ")
+  
+        logging.info("Upserting data into Postgres")
 
         # retrieving the extract_date of the last load from xcom
         extract_dt = ti.xcom_pull(
@@ -254,36 +231,7 @@ class Director:
         # initializing postgres client to generate postgres connection uri
         # calling connection method to get connection string with 1 specified for the database developer privileges
         pg_conn_uri = self._postgres.connection_factory(1, self._col)
-        self._postgres.upsert_db(
-            pg_conn_uri, ti, incremental_dir, full_dir, extract_dt)
-
-        return
-
-    def telemetry_preprocess(self, load_type):
-        """ This function is required for the kubernetes management of telemetry loading due to excessive memory constraints.
-        """
-        import logging
-        from decouple import config
-
-        # cache folder for incremental and full pathway processed csv files containing table data
-        incremental_dir = config("inc_processed_dir")
-        full_dir = config("full_processed_dir")
-
-        logging.info("Serializing pandas tables into CSV...")
-
-        race_telem_table = self.full_load_race_telem()
-
-        quali_telem_table = self.full_load_quali_telem()
-
-        extract_dt = self._db_builder.serialize_full(
-            race_telem_table, quali_telem_table, 2)  # serialize method for the telemetry data
-
-        # pushing data into database
-        # initializing postgres client to generate postgres connection uri
-        # calling connection method to get connection string with 1 specified for the database developer privileges
-        pg_conn_uri = self._postgres.connection_factory(1, self._col)
-        self._postgres.upsert_db(
-            pg_conn_uri, load_type, incremental_dir, full_dir, extract_dt)
+        self._postgres.upsert_db(pg_conn_uri, ti, self._inc_processed_dir, self._full_processed_dir, extract_dt)
 
         return
 
@@ -293,20 +241,22 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-        from decouple import config
-
-        # cache folder for qualifying data
-        qualifying_dir = config("inc_qualifying")
+        from datetime import datetime
+ 
+        # variable initialisation
+        extract_dt = datetime.today().strftime("%Y-%m-%d")  # date stamp for record keeping 
 
         logging.info("Extracting Aggregated Qualifying Data.")
 
         # outputs the dataframe for the qualifying data to be stored in xcoms
         qualifying_table = self._db_builder.incremental_qualifying(
-            ti, qualifying_dir)
-
-        # accessing current context of running task instance to push to xcoms
-        ti.xcom_push(key='qualifying_table', value=qualifying_table)
-
+            ti, self._inc_qualifying_dir)
+        
+        logging.info("Serialising dataframe to CSV...")
+        self._db_builder.csv_producer(self._inc_processed_dir, extract_dt, qualifying_table, "Qualifying", "Incremental") # function call to store csv file of dataframe content
+        # pushing extract date value to xcoms
+        ti.xcom_push(key='incremental_extract_date', value=extract_dt)
+ 
         return
 
     def inc_results(self, ti):
@@ -315,19 +265,18 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-        from decouple import config
-
-        # cache folder for results data
-        results_dir = config("inc_results")
-
+        from datetime import datetime
+ 
+        # variable initialisation
+        extract_dt = datetime.today().strftime("%Y-%m-%d")  # date stamp for record keeping 
+   
         logging.info("Extracting Aggregated Results Data...")
 
         # outputs the dataframe for the race result data to be stored in xcoms
-        results_table = self._db_builder.incremental_results(ti, results_dir)
-
-        # accessing current context of running task instance to push to xcoms
-        ti.xcom_push(key='results_table', value=results_table)
-
+        results_table = self._db_builder.incremental_results(ti, self._inc_results_dir)
+        logging.info("Serialising dataframe to CSV...")
+        self._db_builder.csv_producer(self._inc_processed_dir, extract_dt, results_table, "Results", "Incremental") # function call to store csv file of dataframe content
+        
         return
 
     def inc_quali_telem(self, start_date, end_date):
@@ -336,21 +285,20 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-        from decouple import config
-
-        # cache folder for telemetry data
-        quali_dir = config("inc_qualitelem")
-
+        from datetime import datetime
+ 
+        # variable initialisation
+        extract_dt = datetime.today().strftime("%Y-%m-%d")  # date stamp for record keeping 
+   
         logging.info("Extracting aggregated Quali Telemetry data... ")
 
         # outputs the dataframe for the qualifying telemetry data to be stored in xcoms
         quali_telem_table = self._db_builder.incremental_quali_telem(
-            quali_dir, start_date, end_date)
+            self._inc_quali_dir, start_date, end_date)
+        logging.info("Serialising dataframe to CSV...")
+        self._db_builder.csv_producer(self._inc_processed_dir, extract_dt, quali_telem_table, "QualifyingTelemetry", "Incremental") # function call to store csv file of dataframe content
 
-        # accessing current context of running task instance to push to xcoms
-        # ti.xcom_push(key='quali_telem_table', value=quali_telem_table)
-
-        return quali_telem_table
+        return 
 
     def inc_race_telem(self, ti):
         """ This function generates the tabled data for the telemetry level of granularity for F1 races.
@@ -358,52 +306,20 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-        from decouple import config
-
-        # cache folder for telemetry data
-        race_dir = config("inc_racetelem")
-
+        from datetime import datetime
+ 
+        # variable initialisation
+        extract_dt = datetime.today().strftime("%Y-%m-%d")  # date stamp for record keeping 
+   
         logging.info("Extracting aggregated Race Telemetry data... ")
 
         # outputs the dataframe for the race telemetry data to be stored in xcoms
         race_telem_table = self._db_builder.incremental_race_telem(
-            ti, race_dir)
-
-        # accessing current context of running task instance to push to xcoms
-        # ti.xcom_push(key='race_telem_table', value=race_telem_table)
-
-        return race_telem_table
-
-    def inc_load_serialize(self, ti):
-        """ This function generates the CSV files for all levels of granularity which are converted from the previously generated dataframes. 
-        Takes two inputs, one being the db_handler which is a reference to the processor class, and 
-        a ti argument for a reference to the task instance of the current running instance"""
-
-        import logging
-        from decouple import config
-
-        # directory which the processed csv files are output to as a result of this function
-        processed_dir = config("user_home")
-
-        logging.info("Serializing pandas dataframes into CSV table format...")
-
-        results_table = ti.xcom_pull(
-            task_ids='incremental_results_load', key='results_table')
-        qualifying_table = ti.xcom_pull(
-            task_ids='incremental_qualifying_load', key='qualifying_table')
-        race_telem_table = ti.xcom_pull(
-            task_ids='incremental_race_telem_load', key='race_telem_table')
-        quali_telem_table = ti.xcom_pull(
-            task_ids='incremental_quali_telem_load', key='quali_telem_table')
-
-        # creates the extract date after the function is executed which will be pushed to xcoms.
-        extract_dt = self._db_builder.increment_serialize(
-            processed_dir, results_table, qualifying_table, race_telem_table, quali_telem_table)
-
-        # pushing value to xcoms
-        ti.xcom_push(key='incremental_extract_date', value=extract_dt)
-
-        return
+            ti, self._inc_racetelem_dir)
+        logging.info("Serialising dataframe to CSV...")
+        self._db_builder.csv_producer(self._inc_processed_dir, extract_dt, race_telem_table, "RaceTelemetry", "Incremental") # function call to store csv file of dataframe content
+        
+        return 
 
     def inc_load_upsert(self, ti):
         """ This function upserts the CSV data into the staging  database tables ready to be transformed into the production 3nf tables. 
@@ -411,24 +327,17 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-        from decouple import config
-
-        # cache folder for incremental and full pathway processed csv files containing table data
-        incremental_dir = config("inc_processed_dir")
-
-        full_dir = config("full_processed_dir")
-
+    
         logging.info("Upserting data into Postgres ")
 
         # retrieving the extract_date of the last load from xcom
         extract_dt = ti.xcom_pull(
-            task_ids='incremental_load_serialization', key='incremental_extract_date')
+            task_ids='full_ext_load_race.full_qualifying_load', key='incremental_extract_date')
 
         # initializing postgres client to generate postgres connection uri
         # calling connection method to get connection string with 1 specified for the database developer privileges
         pg_conn_uri = self._postgres.connection_factory(1, self._col)
-        self._postgres.upsert_db(
-            pg_conn_uri, ti, incremental_dir, full_dir, extract_dt)
+        self._postgres.upsert_db(pg_conn_uri, ti, self._inc_processed_dir, self._full_processed_dir, extract_dt)
 
         return
 
@@ -504,28 +413,20 @@ class Director:
         return full_load_telem
     '''
 
-    def full_load_pre_transformation(self, dag, group_id, default_args):
+    def full_load_pre_transformation(self):
         """This function calls the extract and load function to kick off the pipeline.
         Takes three arguments, the first being the ETL orchestration class as a param, the second being the decision of full load vs incremental load, the third being a 
         reference to the task instance to push the results to the airflow metadata database. Lastly ext_type refers to the validation parameter. """
 
         from datetime import timedelta
-        from airflow.utils.task_group import TaskGroup
         from airflow.operators.python import PythonOperator
 
-        with TaskGroup(group_id=group_id, default_args=default_args, dag=dag) as full_load_pt:
-
-            full_load_serialize = PythonOperator(task_id='full_load_serialization',
-                                                 python_callable=self.full_load_serialize,
-                                                 do_xcom_push=False,
-                                                 sla=timedelta(minutes=30))
-
-            full_load_upsert = PythonOperator(task_id='full_load_upsert',
+        full_load_upsert = PythonOperator(task_id='full_load_upsert',
                                               python_callable=self.full_load_upsert,
                                               do_xcom_push=False,
                                               sla=timedelta(minutes=30))
 
-        return full_load_pt
+        return full_load_upsert
 
     def inc_load_race(self, dag, group_id, default_args):
         """This function calls the extract and load function to kick off the pipeline.
@@ -582,60 +483,22 @@ class Director:
         return inc_load_telem  
         '''
 
-    def inc_load_pre_transf(self, dag, group_id, default_args):
+    def inc_load_pre_transf(self):
         """This function calls the extract and load function to kick off the pipeline.
         Takes five arguments, the first first is a reference to the task instance to push the results to the airflow metadata database.
         The next three pertaining to the taskgroup initialization (dag, group_id and default_args), the next being the ETL orchestration class as a param, 
         the last param being the decision of full load vs incremental load being the validation parameter."""
 
         from datetime import timedelta
-        from airflow.utils.task_group import TaskGroup
         from airflow.operators.python import PythonOperator
 
-        with TaskGroup(group_id=group_id, default_args=default_args, dag=dag) as incremental_load_pt:
-
-            incremental_load_serialization = PythonOperator(task_id='incremental_load_serialization',
-                                                            python_callable=self.inc_load_serialize,
-                                                            do_xcom_push=True,
-                                                            sla=timedelta(minutes=10))
-
-            incremental_load_upsert = PythonOperator(task_id='incremental_load_upsert',
+        incremental_load_upsert = PythonOperator(task_id='incremental_load_upsert',
                                                      python_callable=self.inc_load_upsert,
                                                      do_xcom_push=True,
                                                      sla=timedelta(minutes=10))
 
-        return incremental_load_pt
+        return incremental_load_upsert
 
-    # detecting new data
-    def changed_data_capture(self, ti):
-        """This class is responsible for determining if there has been any changed data detected between new loaded data
-        and that currently in the database tables. Takes two arguments, first being a reference to the postgres client class, and second being a reference to the postgres connection class."""
-        import logging
-
-        # accessing current context to pull tables from xcoms for serialisation
-
-        logging.info("Loading dataframes stored within xcomms...")
-        qualifying_table = ti.xcom_pull(
-            key='qualifying_table', task_ids='load_db')
-        results_table = ti.xcom_pull(key='results_table', task_ids='load_db')
-        race_telem_table = ti.xcom_pull(
-            key='race_telem_table', task_ids='load_db')
-        quali_telem_table = ti.xcom_pull(
-            key='quali_telem_table', task_ids='load_db')
-
-        # calling function needed to generate the extract date of the newly ingested data
-        extract_dt = self._db_builder.increment_serialize(
-            qualifying_table, results_table, race_telem_table, quali_telem_table, ti)
-
-        # storing the extract_dt in xcoms for later retrieval
-        ti.xcom_push(key='incremental_extract_dt', value=extract_dt)
-
-        # creating the postgres conn uri by calling the function from the client.
-        pg_conn_uri = self._postgres.get_connection_id(self._pg_conn)
-        self._postgres.changed_data_capture(
-            pg_conn_uri, extract_dt, results_table, qualifying_table, race_telem_table, quali_telem_table)
-
-        return
 
     def full_trans(self, dag, group_id, default_args):
         """This function returns the task group for the full transform function"""
@@ -675,30 +538,31 @@ class Director:
                                                             sla=timedelta(minutes=10))
         return transform_inc
 
-    def changed_data_detect(self, ti):
-        """ Function retrieves the xcoms values for the dataframes for race, result, qualifying, and telemetry data required in order to serialize the data 
-        and upserts the data into the postgres database - this function is specific to the incremental flow of control. Also takes a reference to a DatabaseETL
-        object and a task instance object."""
-
+    # detecting new data
+    def changed_data_handler(self, ti):
+        """This class is responsible for determining if there has been any changed data detected between new loaded data
+        and that currently in the database tables. Takes two arguments, first being a reference to the postgres client class, and second being a reference to the postgres connection class.
+        Works for the incremental pathway"""
         import logging
 
-        # accessing current context of running task instance to pull the tables which are to be compared to the existing database tables
+        extract_dt = ti.xcom_pull(task_ids="inc_ext_load_race", key="incremental_extract_dt")
+        # creating the postgres conn uri by calling the function from the client.
+        pg_conn_uri = self._postgres.get_connection_id(self._pg_conn)
+        contains_new_data = self._postgres.changed_data_capture(
+            pg_conn_uri, extract_dt, self._inc_processed_dir)
 
-        logging.info("Loading dataframes stored within xcoms...")
-        qualifying_table = ti.xcom_pull(
-            key='qualifying_table', task_ids='load_db')
-        results_table = ti.xcom_pull(key='results_table', task_ids='load_db')
-        race_telem_table = ti.xcom_pull(
-            key='race_telem_table', task_ids='load_db')
-        quali_telem_table = ti.xcom_pull(
-            key='quali_telem_table', task_ids='load_db')
-
-        # pushing the extract date into xcoms for later retrieval
-        extract_dt = ti.xcom_pull(
-            key='incremental_extract_dt', task_ids='changed_data_detected')
-
-        # calling method from passed class object
-        self._db_builder.changed_data_detected(
-            ti, qualifying_table, results_table, race_telem_table, quali_telem_table, extract_dt)
-
-        return
+        if not contains_new_data == 0: #check if new data was detected inside dataframe 
+            return False
+        elif contains_new_data == 0:
+            return True
+        
+    def changed_data_detected(self, ti):
+        
+        """ this function upserts new data into the database after successfully clearing the short circuit operator
+        """
+        
+        #pull the extract date from the last loaded body of data 
+        ti.xcom_pull(task_ids="", key="")
+        
+        pg_conn_uri = self._postgres.get_connection_id(self._pg_conn)
+        self._postgres.upsert_db(pg_conn_uri, ti, self._inc_processed_dir, self._inc_full_processed_dir, extract_dt)
