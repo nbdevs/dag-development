@@ -92,8 +92,6 @@ class Director:
         # variable initialisation
         extract_dt = datetime.today().strftime("%Y-%m-%d")  # date stamp for record keeping 
 
-        # folder for cache for season data
-        season_cache = config("season")
         logging.info("Extracting Aggregated Season Data...")
         # outputs aggregated season data as dataframe to be pushed to xcoms
         season_table = self._db_builder.extract_season_grain(
@@ -542,7 +540,7 @@ class Director:
         import logging
         
         #pull the extract date from the last loaded body of data 
-        ti.xcom_pull(task_ids="", key="")
+        extract_dt = ti.xcom_pull(task_ids="", key="")
         logging.info("Creating new postgres connection...")
         pg_conn_uri = self._postgres.get_connection_id(self._pg_conn)
         logging.info("Upserting data into Postgres")
