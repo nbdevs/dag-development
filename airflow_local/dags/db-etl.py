@@ -11,7 +11,7 @@ from colours import Colours
  
 # Initializing global variables for duration of data collection
 start_date = 2018 # telemetry data only available from 2019 onwards for races
-end_date = 2023
+end_date = 2024
 
 # Instantiating classes used within the ETL process
 col = Colours()
@@ -22,7 +22,7 @@ db_director = Director(start_date, end_date, col, db_handler, dw_handler)
 
 # Defining baseline arguments for DAGs
 default_args = {
-    'start_date': datetime(2023, 8, 20),
+    'start_date': datetime(2024, 4, 9),
     'schedule_interval': 'None', # change this back to weekly after 
     'catchup_by_default': False,
     'do_xcom_push': True,
@@ -67,16 +67,16 @@ with DAG(
     
     full_extraction_load_race = db_director.full_load_race(db_etl, 'full_ext_load_race', default_args)
     
-    #  full_extraction_load_telemetry = db_director.full_load_telemetry() # resource heavy tasks using kubernetespodoperator 
+    # full_extraction_load_telemetry = db_director.full_load_telemetry() # resource heavy tasks using kubernetespodoperator 
 
-    full_extraction_load_pre_transf = db_director.full_load_pre_transformation(db_etl, 'full_ext_load_pt', default_args)
+    full_extraction_load_pre_transf = db_director.full_load_pre_transformation()
     
     # incremental load task groups 
     incremental_extraction_load_race = db_director.inc_load_race(db_etl, 'incremental_ext_load_race', default_args)
     
     # incremental_extraction_load_telem = db_director.inc_load_telem() # resource heavy tasks using kubernetespodoperator 
     
-    incremental_extraction_load_pre_transf = db_director.inc_load_pre_transf(db_etl, 'incremental_ext_load_pt', default_args)
+    incremental_extraction_load_pre_transf = db_director.inc_load_pre_transf()
 
     change_data_capture = ShortCircuitOperator(task_id='change_data_capture',
                                                python_callable=db_director.changed_data_handler,
