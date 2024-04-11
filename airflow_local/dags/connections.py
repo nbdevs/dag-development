@@ -23,12 +23,12 @@ class PostgresConnection(IConnection):
         from decouple import config
         
         if arg == 1:  
-            self.postgres_uri = config('POSTGRES_URI_DB')
+            self._postgres_uri = config('POSTGRES_URI_DB')
             
         elif arg == 2:
-            self.postgres.uri = config('POSTGRES_URI_DW')
+            self._postgres.uri = config('POSTGRES_URI_DW')
         
-    def create_connection(self, arg) -> str: 
+    def create_connection(self) -> str: 
         """Generate postgresql connection string for db connection"""
         
         # take input in main program which validates input and produces conn string 
@@ -48,7 +48,7 @@ class SnowflakeConnection(IConnection):
         
         from decouple import config
         
-        self.snowflake_uri = config('SNOWFLAKE_URI')
+        self._snowflake_uri = config('SNOWFLAKE_URI')
  
     def create_connection(self) -> str: 
         """ Generate snowflake connection string for db connection"""
@@ -89,7 +89,7 @@ class S3Connection(IConnection):
         # generate aws access which grants access to s3 bucket for storage
    
         s3_key = self._s3_key  #s3 aws key 
-        s3_secret = self._w3_secret #s3 secret key
+        s3_secret = self._s3_secret #s3 secret key
         s3_region = self._s3_region #s3 region
         s3_bucket = self._s3_bucket #s3 bucket
 
@@ -116,11 +116,11 @@ class PostgresClient(AbstractClient):
         
         try:
             if arg == 1: # flow of control for the database developer in ETL 
-                postgres = PostgresConnection(self, arg)
+                postgres = PostgresConnection(arg)
                 # call function to create connection
                 postgres_conn = self.get_connection_id(postgres)
             elif arg == 2: # flow of control for the data warehouse developer in etl 
-                postgres = PostgresConnection(self, arg)
+                postgres = PostgresConnection(arg)
                 # call function to create connection
                 postgres_conn = self.get_connection_id(postgres)
         except ValueError:
@@ -234,3 +234,10 @@ class S3Client(AbstractClient):
 
         return s3_key, s3_secret, s3_region, s3_bucket
           
+
+if __name__ == "__main__":
+    postgres = PostgresClient()
+    from colours import Colours
+    col = Colours()
+    pg_conn_uri = postgres.connection_factory(1, col)
+    
