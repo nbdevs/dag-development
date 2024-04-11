@@ -234,10 +234,3 @@ class S3Client(AbstractClient):
 
         return s3_key, s3_secret, s3_region, s3_bucket
           
-
-if __name__ == "__main__":
-    postgres = PostgresClient()
-    from colours import Colours
-    col = Colours()
-    pg_conn_uri = postgres.connection_factory(1, col)
-    
