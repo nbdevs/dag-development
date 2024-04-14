@@ -17,16 +17,22 @@ class PostgresConnection(IConnection):
       
     # protected variable 
     _postgres_uri = ""
+
+    def __new__(cls, arg): # creating new connection 
+        instance = super().__new__(cls)
+        return instance
     
     def __init__(self, arg):
         
         from decouple import config
         
         if arg == 1:  
-            self._postgres_uri = config('POSTGRES_URI_DB')
+
+            self._postgres_uri = config("POSTGRES_URI_DB")
             
         elif arg == 2:
-            self._postgres.uri = config('POSTGRES_URI_DW')
+
+            self._postgres_uri = config("POSTGRES_URI_DW")
         
     def create_connection(self) -> str: 
         """Generate postgresql connection string for db connection"""
@@ -73,15 +79,23 @@ class S3Connection(IConnection):
     _s3_secret = ""
     _s3_region = ""
     _s3_bucket = ""
+    _s3_uri = ""
     
     def __init__(self):
         
         from decouple import config
 
-        self.aws_key = config('AWS_KEY_ID')
-        self.aws_secret_key = config('AWS_SECRET_KEY')
-        self.aws_region = config('AWS_REGION')
-        self.aws_bucket = config('AWS_BUCKET_NAME')
+        self._s3_key = config('AWS_KEY_ID')
+        self._s3_secret_key = config('AWS_SECRET_KEY')
+        self._s3_region = config('AWS_REGION')
+        self._s3_bucket = config('AWS_BUCKET_NAME')
+        
+        self._s3_uri = dict(
+                key=self._s3_key,
+                secret=self._s3_secret,
+                region=self._s3_region,
+                bucket=self._s3_bucket
+            )
         
     def create_connection(self) -> str: 
         """ Generate s3 connection variables for bucket access """
@@ -105,7 +119,8 @@ class AbstractClient(ABC):
     def get_connection_id(self, database_conn):
         """ Base method for generating db connection which all subclasses must implement"""
         conn = database_conn.create_connection()
-    
+        
+        return conn
 class PostgresClient(AbstractClient):
 
     """ The client class for retrieving connections in order to access postgres database"""
@@ -118,36 +133,35 @@ class PostgresClient(AbstractClient):
             if arg == 1: # flow of control for the database developer in ETL 
                 postgres = PostgresConnection(arg)
                 # call function to create connection
-                postgres_conn = self.get_connection_id(postgres)
+                postgres_conn = super().get_connection_id(postgres)
             elif arg == 2: # flow of control for the data warehouse developer in etl 
                 postgres = PostgresConnection(arg)
                 # call function to create connection
-                postgres_conn = self.get_connection_id(postgres)
+                postgres_conn = super().get_connection_id(postgres)
         except ValueError:
                 logging.error(col.boldFont + col.redFont +
                   "[ERROR] " + col.endFont + "Integer out of range.")
             
         return postgres_conn
     
-    def upsert_db(self, conn, ti, inc_processed_dir, full_processed_dir, extract_dt):
+    def upsert_db(self, conn, inc_processed_dir, full_processed_dir, extract_dt):
         """ This function is responsible for extracting CSVs from local file system into postgres db. 
             Variables used in this function are the connection URI  and a reference to ti module for the
             decision variable that relates to either a 'full' or 'incremental load'"""
         
         import os
         import logging
-        from psycopg2 import OperationalError, ProgrammingError
-        from airflow.providers.postgres.hooks.postgres import PostgresHook
-
+        import psycopg2 as pg
+ 
         # instantiating postgres client details to pass to pg hook 
         try:
-            pg_hook = PostgresHook(postgres_conn_id=conn)
-            pg_connection = pg_hook.get_conn()
-        except OperationalError:
+            
+            pg_connection = pg.connect(conn)
+        except pg.OperationalError:
             logging.error("Database URI is incorrect.")
             
         #determining the load type for the database from the branch operator of airflow 
-        check_load_type = ti.xcom_pull(task_ids='determine_extract_format', key='extract_format')
+        check_load_type = "Full" #ti.xcom_pull(task_ids='determine_extract_format', key='extract_format')
           
         if check_load_type == "Incremental":
             dest_dir = inc_processed_dir
@@ -169,8 +183,9 @@ class PostgresClient(AbstractClient):
                 # query to copy to table in database whilst removing csv header delimiter
                 query = 'COPY {} FROM STDIN WITH CSV HEADER DELIMITER ',''.format(table_name)
                 try:
-                    pg_hook.copy_expert(query, file)
-                except ProgrammingError:
+                    cur = pg_connection.cursor()
+                    cur.copy_expert(query, file)
+                except pg.ProgrammingError:
                     logging.error("Error writing data to table.")
                 finally: 
                     pg_connection.close()
@@ -234,3 +249,18 @@ class S3Client(AbstractClient):
 
         return s3_key, s3_secret, s3_region, s3_bucket
           
+          
+if __name__ == "__main__":
+    from colours import Colours
+    from decouple import config
+    from datetime import datetime 
+    
+    postgres = PostgresClient()
+    col = Colours()
+    
+    conn = postgres.connection_factory(1, col)
+    uris = config("full_processed_dir")
+    urid = config("inc_processed_dir")
+    extract_dt = datetime.now()
+    postgres.upsert_db(conn, uris, urid, extract_dt)
+    

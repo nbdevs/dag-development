@@ -82,7 +82,7 @@ class Director:
 
             return task_group
 
-    def full_load_season(self, ti):
+    def full_load_season(self):
         """ This function generates the tabled data for the season level of granularity for F1 races.
         Takes two inputs, one being the db_handler which is a reference to the processor class, and 
         a ti argument for a reference to the task instance of the current running instance"""
@@ -103,7 +103,7 @@ class Director:
 
         return
 
-    def full_load_qualifying(self, ti):
+    def full_load_qualifying(self):
         """ This function generates the tabled data for the race level of granularity for F1 races.
         Takes two inputs, one being the db_handler which is a reference to the processor class, and 
         a ti argument for a reference to the task instance of the current running instance"""
@@ -146,7 +146,7 @@ class Director:
 
         return
 
-    def full_load_race_telem(self, ti):
+    def full_load_race_telem(self):
         """ This function generates the tabled data for the telemetry level of granularity for F1 races.
         Takes two inputs, one being the db_handler which is a reference to the processor class, and 
         a ti argument for a reference to the task instance of the current running instance"""
@@ -208,7 +208,7 @@ class Director:
         # initializing postgres client to generate postgres connection uri
         # calling connection method to get connection string with 1 specified for the database developer privileges
         pg_conn_uri = self._postgres.connection_factory(1, self._col)
-        self._postgres.upsert_db(pg_conn_uri, ti, self._inc_processed_dir, self._full_processed_dir, extract_dt)
+        self._postgres.upsert_db(pg_conn_uri, self._inc_processed_dir, self._full_processed_dir, extract_dt)
 
         return
 

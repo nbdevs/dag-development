@@ -295,7 +295,6 @@ class DatabaseETL(Processor):
 
                     newname["season_year"] = s
                     newname["race_name"] = race_name
-                    newname
                     # convert time deltas to strings and reformat
                     col = ["best_q1", "best_q2", "best_q3"]
                     for c in col:
@@ -332,37 +331,37 @@ class DatabaseETL(Processor):
         ultimate = []  # empty list to store dataframe for all results across multiple seasons
 
         # outer for loop for seasons
-        for s in range(start_date, end_date):
-            size = f1.get_event_schedule(s)
+        for season in range(start_date, end_date):
+            size = f1.get_event_schedule(season)
 
             # get the number of races in the season by getting all race rounds greater than 0
             race_no = size.query("RoundNumber > 0").shape[0]
 
-            if s == end_date:
+            if season == end_date:
                 incremental_race_counter = race_no
 
             race_name_list = []  # empty list for storing races
             final = []  # empty list for aggregated race data for all drivers during season
 
             # get all the names of the races for this season
-            for i in range(1, race_no):
+            for race in range(1, race_no):
 
-                jam = f1.get_event(s, i)
+                jam = f1.get_event(season, race)
                 # access by column to get value of race
                 race_name = jam.loc["EventName"]
                 print(race_name)
                 race_name_list.append(race_name)
 
-                ff1 = f1.get_session(s, i, 'R')
+                ff1 = f1.get_session(season, race, 'R')
                 # load all driver information for session
                 ff1.load()
                 drivers = ff1.drivers
                 listd = []
 
                 # loop through every driver in the race
-                for d in drivers:
+                for driver in drivers:
 
-                    name = ff1.get_driver(d)
+                    name = ff1.get_driver(driver)
                     newname = name.to_frame().T  # invert columns and values
 
                     columns = ["BroadcastName", "FullName", "Q1", "Q2", "Q3", "Abbreviation",
@@ -379,11 +378,9 @@ class DatabaseETL(Processor):
                     # provide new index
                     newname.index.name = "driver_id"
 
-                    newname["pos_change"] = newname["start_pos"] - \
-                        newname["finish_pos"]
-                    newname["season_year"] = s
+                    newname["pos_change"] = newname["start_pos"] - newname["finish_pos"]
+                    newname["season_year"] = season
                     newname["race_name"] = race_name
-                    newname
                     # convert time deltas to strings and reformat
                     col = ["Time"]
 
@@ -457,7 +454,7 @@ class DatabaseETL(Processor):
         # setting parameters
         round_no = 1
         event = 'qualifying'
-        race_name = []
+        race_data = []
         path = config("pathway")
 
         # setting extract parameters
@@ -487,7 +484,7 @@ class DatabaseETL(Processor):
                 race.raise_for_status()  # generate status code to see if successful request received
                 try:
                     t = race.text  # generate text from response object
-                    race_j = json.loads(t)  # load to python dict obj
+                    race_json = json.loads(t)  # load to python dict obj
                 except ValueError as e:
                     print("Empty JSON response.")
                     logging.warning(e)
@@ -506,7 +503,7 @@ class DatabaseETL(Processor):
 
             else:
 
-                if not race_j["MRData"]:  # dict is empty
+                if not race_json["MRData"]:  # dict is empty
                     logging.critical("Empty JSON")
 
                 else:  # dict is not empty
@@ -514,11 +511,11 @@ class DatabaseETL(Processor):
                     try:  # get the name of the race to indicate a valid response
 
                         # check for empty json response object for race key
-                        assert race_j['MRData']['RaceTable']['Races'] != [
+                        assert race_json['MRData']['RaceTable']['Races'] != [
                         ], "Race number exceeded season boundary. Data now up to date."
 
                         # loop through race array
-                        for race in race_j['MRData']['RaceTable']['Races']:
+                        for race in race_json['MRData']['RaceTable']['Races']:
 
                             race_date_str = race['date']
                             # formatting into datetime obj
@@ -576,7 +573,7 @@ class DatabaseETL(Processor):
                                               "q3_time": q3_time}  # add race name, race date to tuple
 
                                     # adding quali result data to list
-                                    race_name.append(race_n)
+                                    race_data.append(race_n)
 
                             # get race date from json, change to datetime object and compare to extract_dt
                             # if after date then initiate download of data.
@@ -591,7 +588,7 @@ class DatabaseETL(Processor):
                         logging.info(e)
                         break
 
-        return race_name
+        return race_data
 
     def incremental_results(self, ti):
         """ Extracts race result data from Fastf1 api, for the incremental load pathway. 
@@ -627,10 +624,10 @@ class DatabaseETL(Processor):
         # setting extract parameters
         if self.validate_pathway_file(path) == 'Full':
             extract_dt = ti.xcom_pull(
-                task_ids='full_load_serialization', key='extract_date')
+                task_ids='full_ext_load_race.full_qualifying_load', key='extract_date')
         elif self.validate_pathway_file(path) == 'Incremental':
             extract_dt = ti.xcom_pull(
-                task_ids='inc_load_serialization', key='incremental_extract_date')
+                task_ids='incremental_ext_load_race.inc_qualifying_load', key='incremental_extract_date')
 
         # getting season year from extract_dt param
         season = self.extract_year(extract_dt, dt_format)
