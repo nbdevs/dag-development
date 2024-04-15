@@ -37,9 +37,7 @@ class PostgresConnection(IConnection):
     def create_connection(self) -> str: 
         """Generate postgresql connection string for db connection"""
         
-        # take input in main program which validates input and produces conn string 
-        # for one of two database users
-        
+        # take input in main program which validates input and produces conn string for one of two database users
         postgres_uri = self._postgres_uri
         return postgres_uri
     
@@ -153,13 +151,6 @@ class PostgresClient(AbstractClient):
         import logging
         import psycopg2 as pg
  
-        # instantiating postgres client details to pass to pg hook 
-        try:
-            
-            pg_connection = pg.connect(conn)
-        except pg.OperationalError:
-            logging.error("Database URI is incorrect.")
-            
         #determining the load type for the database from the branch operator of airflow 
         check_load_type = "Full" #ti.xcom_pull(task_ids='determine_extract_format', key='extract_format')
           
@@ -173,23 +164,30 @@ class PostgresClient(AbstractClient):
                 logging.error("'check_load_type' variable in airflow task_id empty.")
                 logging.info("Ensure this variable has been set.")
        
-        # for each file in the destination directory 
-        for filename in os.listdir(dest_dir):
-            file = os.path.join(dest_dir, filename) # join destination directory and filename to same path
-            if os.path.isfile(file): # check the full path to the file exists
-        
-                # strip extract date and "csv" label from filename
-                table_name = file.strip(f'"{extract_dt}.csv"')
-                # query to copy to table in database whilst removing csv header delimiter
-                query = 'COPY {} FROM STDIN WITH CSV HEADER DELIMITER ',''.format(table_name)
-                try:
-                    cur = pg_connection.cursor()
-                    cur.copy_expert(query, file)
-                except pg.ProgrammingError:
-                    logging.error("Error writing data to table.")
-                finally: 
-                    pg_connection.close()
-    
+        try:
+            # instantiating postgres client details to pass to pg hook 
+            pg_connection = pg.connect(conn)
+            # for each file in the destination directory 
+            for filename in os.listdir(dest_dir):
+                file = os.path.join(dest_dir, filename) # join destination directory and filename to same path
+                if os.path.isfile(file): # check the full path to the file exists
+            
+                    # strip extract date and "csv" label from filename
+                    table_name = file.strip(f'"{extract_dt}.csv"')
+                    # query to copy to table in database whilst removing csv header delimiter
+                    query = 'COPY {} FROM STDIN WITH CSV HEADER DELIMITER ',''.format(table_name)
+                    try:
+                        cur = pg_connection.cursor()
+                        cur.copy_expert(query, file)
+                    except pg.ProgrammingError:
+                        logging.error(f"Error performing query: '{query}' on database tables.")
+                    finally: #close comms with the database
+                        cur.close()
+                        pg_connection.close()            
+            
+        except pg.OperationalError:
+            logging.error("Database URI is incorrect.")
+              
         return
         
     def changed_data_capture(self, conn, extract_dt, inc_processed_dir):
@@ -249,18 +247,3 @@ class S3Client(AbstractClient):
 
         return s3_key, s3_secret, s3_region, s3_bucket
           
-          
-if __name__ == "__main__":
-    from colours import Colours
-    from decouple import config
-    from datetime import datetime 
-    
-    postgres = PostgresClient()
-    col = Colours()
-    
-    conn = postgres.connection_factory(1, col)
-    uris = config("full_processed_dir")
-    urid = config("inc_processed_dir")
-    extract_dt = datetime.now()
-    postgres.upsert_db(conn, uris, urid, extract_dt)
-    
