@@ -54,7 +54,7 @@ services:
           - pgreplica
 
   postgresmaster:
-    image: nbroj/database-images:prod-db.v6.0.0
+    image: nbroj/database-images:prod-db.v6.1.0
     env_file:
       - .env
     environment:
