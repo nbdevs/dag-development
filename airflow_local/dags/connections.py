@@ -25,14 +25,24 @@ class PostgresConnection(IConnection):
     def __init__(self, arg):
         
         from decouple import config
-        
-        if arg == 1:  
 
-            self._postgres_uri = config("POSTGRES_URI_DB")
+        user_connect_params = dict(
+            dbname=config("POSTGRES_DB"),
+            port=config("PG_BOUNCER_PORT"),
+            user=config("DB_USER"),
+            host=config("POSTGRES_HOST"),
+            password=config("DB_PASSWORD"),
+            options=config("SCHEMA")
+        )
+
+        # Connection details for external postgres db
+        if arg == 1:  
+            self._postgres_uri = user_connect_params
             
         elif arg == 2:
-
-            self._postgres_uri = config("POSTGRES_URI_DW")
+            user_connect_params["user"] = config("PG_REP_USER")
+            user_connect_params["password"] = config("PG_REP_PASSWORD")
+            self._postgres_uri = user_connect_params
         
     def create_connection(self) -> str: 
         """Generate postgresql connection string for db connection"""
@@ -166,18 +176,29 @@ class PostgresClient(AbstractClient):
        
         try:
             # instantiating postgres client details to pass to pg hook 
-            pg_connection = pg.connect(conn)
+            pg_connection = pg.connect(
+                dbname=conn["dbname"],
+                user=conn["user"],
+                host=conn["host"],
+                password=conn["password"],
+                port=conn["port"]
+            )
             # for each file in the destination directory 
             for filename in os.listdir(dest_dir):
                 file = os.path.join(dest_dir, filename) # join destination directory and filename to same path
                 if os.path.isfile(file): # check the full path to the file exists
+                    
+                    # i can open the file with open method, read the first line of the file 
+                    # and get the number of records for the database tables by appending to array
+                    # then use this variable for the stored procedure 
             
                     # strip extract date and "csv" label from filename
                     table_name = file.strip(f'"{extract_dt}.csv"')
                     # query to copy to table in database whilst removing csv header delimiter
-                    query = 'COPY {} FROM STDIN WITH CSV HEADER DELIMITER ',''.format(table_name)
+                    query = 'COPY preprocess.{} FROM STDIN WITH CSV HEADER DELIMITER ',''.format(table_name)
                     try:
                         cur = pg_connection.cursor()
+                        # cur.execute('SET search_path TO preprocess')
                         cur.copy_expert(query, file)
                     except pg.ProgrammingError:
                         logging.error(f"Error performing query: '{query}' on database tables.")
@@ -205,7 +226,7 @@ class PostgresClient(AbstractClient):
         #export table to csv then convert to dataframes 
         #compare table data to new dataframe with diff/merge/compare function
         #extract the new data only from the new dataframe if there is any 
-        #call short circuit opertaor if no new data, but if new THEN
+        #call short circuit operator if no new data, but if new THEN
         
         #if new data then return 1 AND
         #  upsert these into database tables with upsert_db function
@@ -242,7 +263,7 @@ class S3Client(AbstractClient):
         
         s3 = S3Connection(self)
         
-        #calling connection_factory method to pass conn details to dw dev
+        # calling connection_factory method to pass conn details to dw dev
         s3_key, s3_secret, s3_region, s3_bucket  = self.get_connection_id(s3)
 
         return s3_key, s3_secret, s3_region, s3_bucket
