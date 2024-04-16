@@ -417,19 +417,19 @@ class DatabaseETL(Processor):
         extract_type which refers to whether this is occurring on a full or incremental load."""
 
         if table_name == "Results":
-            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(user_home, extract_type, table_name,
+            dataframe.to_csv('{}/cache/{}Processed/{}-{}.csv'.format(user_home, extract_type, table_name,
                         extract_dt), index=False, header=True)
         elif table_name == "Qualifying":
-            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(user_home, extract_type, table_name,
+            dataframe.to_csv('{}/cache/{}Processed/{}-{}.csv'.format(user_home, extract_type, table_name,
                         extract_dt), index=False, header=True)
         elif table_name == "Season":
-            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(user_home, extract_type, table_name,
+            dataframe.to_csv('{}/cache/{}Processed/{}-{}.csv'.format(user_home, extract_type, table_name,
                 extract_dt), index=False, header=True)
         elif table_name == "RaceTelem":
-            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(user_home, extract_type, table_name,
+            dataframe.to_csv('{}/cache/{}Processed/{}-{}.csv'.format(user_home, extract_type, table_name,
                         extract_dt), index=False, header=True)
         elif table_name == "QualifyingTelem":
-            dataframe.to_csv('{}/cache/{}Processed/{}{}.csv'.format(user_home, extract_type, table_name,
+            dataframe.to_csv('{}/cache/{}Processed/{}-{}.csv'.format(user_home, extract_type, table_name,
                         extract_dt), index=False, header=True)
         return
 
