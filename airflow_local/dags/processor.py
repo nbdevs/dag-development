@@ -175,7 +175,19 @@ class DatabaseETL(Processor):
                 wfile.write("{0}".format(variable))
                 wfile.write("\n")
             return variable
-
+        
+    def determine_load_date(self, pathway) -> str:
+        """function which determines which load_type variable is produced for incremental upsert"""
+        
+        import logging 
+    
+        with open(pathway, "r") as file:
+            lines = file.readlines()
+            if len(lines) == 2 and lines[1] == "Incremental": # the first incremental after a full should use the full parameter
+                return "Full"
+            elif len(lines) > 2 and lines[2] == "Incremental": # every incremental thereafter uses the incremental parameter
+                return "Incremental"
+                
     def postgres_transformations(self):
         pass
 
