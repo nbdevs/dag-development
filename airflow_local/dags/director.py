@@ -202,8 +202,7 @@ class Director:
         logging.info("Upserting data into Postgres")
 
         # retrieving the extract_date of the last load from xcom
-        extract_dt = ti.xcom_pull(
-            task_ids='full_load_serialization', key='extract_date')
+        extract_dt = ti.xcom_pull(task_ids='full_ext_load_race.full_results_load', key='extract_date')
 
         # initializing postgres client to generate postgres connection uri
         # calling connection method to get connection string with 1 specified for the database developer privileges
