@@ -152,6 +152,16 @@ class PostgresClient(AbstractClient):
             
         return postgres_conn
     
+    def no_columns(self, file):
+        import os
+        
+        with open(file, 'rb') as this_file:
+            words = file.readline()
+            record_list = words[0].split()
+            num_records = len(record_list) 
+
+            return num_records
+                    
     def upsert_db(self, conn, inc_processed_dir, full_processed_dir, extract_dt):
         """ This function is responsible for extracting CSVs from local file system into postgres db. 
             Variables used in this function are the connection URI  and a reference to ti module for the
@@ -174,41 +184,45 @@ class PostgresClient(AbstractClient):
                 logging.error("'check_load_type' variable in airflow task_id empty.")
                 logging.info("Ensure this variable has been set.")
        
-        try:
-            # instantiating postgres client details to pass to pg hook 
-            pg_connection = pg.connect(
-                dbname=conn["dbname"],
-                user=conn["user"],
-                host=conn["host"],
-                password=conn["password"],
-                port=conn["port"]
-            )
-            # for each file in the destination directory 
-            for filename in os.listdir(dest_dir):
-                file = os.path.join(dest_dir, filename) # join destination directory and filename to same path
-                if os.path.isfile(file): # check the full path to the file exists
+       
+        # for each file in the destination directory 
+        for filename in os.listdir(dest_dir):
+            file = os.path.join(dest_dir, filename) # join destination directory and filename to same path
+            if os.path.isfile(file): # check the full path to the file exists
+
+                # i can open the file with open method, read the first line of the file 
+                # and get the number of records for the database tables by appending to array
+                # then use this variable for the stored procedure 
+
+                # strip extract date and "csv" label from filename
+                table = file.replace(f"-{extract_dt}.csv", "")
+                table_name = table.replace(f"{dest_dir}", "")
+    
+                # query to copy to table in database whilst removing csv header delimiter
+                query = ("COPY preprocess.%s FROM STDIN WITH CSV HEADER DELIMITER ','" % table_name)
+                try:
+                    # instantiating postgres client details to pass to pg hook 
+                    pg_connection = pg.connect(
+                        dbname=conn["dbname"],
+                        user=conn["user"],
+                        host=conn["host"],
+                        password=conn["password"],
+                        port=conn["port"]
+                    )
                     
-                    # i can open the file with open method, read the first line of the file 
-                    # and get the number of records for the database tables by appending to array
-                    # then use this variable for the stored procedure 
-            
-                    # strip extract date and "csv" label from filename
-                    table_name = file.strip(f'"{extract_dt}.csv"')
-                    # query to copy to table in database whilst removing csv header delimiter
-                    query = 'COPY preprocess.{} FROM STDIN WITH CSV HEADER DELIMITER ',''.format(table_name)
-                    try:
-                        cur = pg_connection.cursor()
-                        # cur.execute('SET search_path TO preprocess')
-                        cur.copy_expert(query, file)
-                    except pg.ProgrammingError:
-                        logging.error(f"Error performing query: '{query}' on database tables.")
-                    finally: #close comms with the database
-                        cur.close()
-                        pg_connection.close()            
-            
-        except pg.OperationalError:
-            logging.error("Database URI is incorrect.")
-              
+                    with open(file, 'rb') as this_file:
+                        with pg_connection:
+                            with pg_connection.cursor() as cur:
+                                cur.copy_expert(query, this_file)
+                    cur.close()
+                    pg_connection.close()
+                except pg.ProgrammingError:
+                    logging.error(f"Error Performing Query: '{query}' On Database Table - '{table_name}'.")
+                except OSError:
+                    logging.error("Could not read the filename: ", file)
+                except pg.OperationalError:
+                        logging.error("Database URI is incorrect.")
+  
         return
         
     def changed_data_capture(self, conn, extract_dt, inc_processed_dir):
