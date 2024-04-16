@@ -204,10 +204,13 @@ class Director:
         # retrieving the extract_date of the last load from xcom
         extract_dt = ti.xcom_pull(task_ids='full_ext_load_race.full_results_load', key='extract_date')
 
+        #retrieve load_type 
+        load_type = ti.com_pull(task_ids='retrieve_extract_type', key="extract_format")
+        
         # initializing postgres client to generate postgres connection uri
         # calling connection method to get connection string with 1 specified for the database developer privileges
         pg_conn_uri = self._postgres.connection_factory(1, self._col)
-        self._postgres.upsert_db(pg_conn_uri, self._inc_processed_dir, self._full_processed_dir, extract_dt)
+        self._postgres.upsert_db(pg_conn_uri, self._inc_processed_dir, self._full_processed_dir, extract_dt, load_type)
 
         return
 
@@ -230,9 +233,7 @@ class Director:
         
         logging.info("Serialising dataframe to CSV...")
         self._db_builder.csv_producer(self._user_home_dir, extract_dt, qualifying_table, "Qualifying", "Incremental") # function call to store csv file of dataframe content
-        # pushing extract date value to xcoms
-        ti.xcom_push(key='incremental_extract_date', value=extract_dt)
- 
+       
         return
 
     def inc_results(self, ti):
@@ -253,6 +254,9 @@ class Director:
         logging.info("Serialising dataframe to CSV...")
         self._db_builder.csv_producer(self._user_home_dir, extract_dt, results_table, "Results", "Incremental") # function call to store csv file of dataframe content
         
+        # pushing extract date value to xcoms
+        ti.xcom_push(key='incremental_extract_date', value=extract_dt)
+                
         return
 
     def inc_quali_telem(self, start_date, end_date):
@@ -305,16 +309,22 @@ class Director:
         import logging
     
         logging.info("Upserting data into Postgres ")
-
-        # retrieving the extract_date of the last load from xcom
-        extract_dt = ti.xcom_pull(
-            task_ids='full_ext_load_race.full_qualifying_load', key='incremental_extract_date')
-
+        
+        determinant = self._db_builder.determine_load_date(self._pathway) # function call for determining load_date
+        
+        if determinant == "Full":
+            extract_dt = ti.xcom_pull(task_ids='full_ext_load_race.full_qualifying_load', key='full_extract_date')# retrieving the extract_date of the last load from xcom
+        elif determinant == "Incremental":
+            extract_dt = ti.xcom_pull(task_ids="inc_ext_load_race.incremental_results_load", key="incremental_extract_date")# retrieving the extract_date of the last load from xcom
+            
+        # retrieve load_type 
+        load_type = ti.com_pull(task_ids='retrieve_extract_type', key="extract_format")
+    
         # initializing postgres client to generate postgres connection uri
         # calling connection method to get connection string with 1 specified for the database developer privileges
         pg_conn_uri = self._postgres.connection_factory(1, self._col)
-        self._postgres.upsert_db(pg_conn_uri, ti, self._inc_processed_dir, self._full_processed_dir, extract_dt)
-
+        self._postgres.upsert_db(pg_conn_uri, ti, self._inc_processed_dir, self._full_processed_dir, extract_dt, load_type)
+ 
         return
 
     # extract and load new data into database
