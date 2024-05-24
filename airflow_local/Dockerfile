@@ -25,6 +25,15 @@ USER root
 #amending updated path to z profile to enable container to find airflow CLI executable in container
 RUN echo ${PATH} >> ~/.zshrc 
 
+# setting up timezone
+ENV TZ=Europe/London
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN apt-get update && apt-get install -y tzdata && \
+    rm /etc/localtime && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata && \
+    apt-get clean
+
 # build dependencies for packages and software 
 RUN set -ex \
     && buildDeps=' \
@@ -83,7 +92,7 @@ COPY --chown=airflow:root ./requirements ${AIRFLOW_USER_HOME}/requirements
 COPY --chown=airflow:root ./cache ${AIRFLOW_USER_HOME}/cache
 COPY --chown=airflow:root ./dags/.airflowignore ${AIRFLOW_USER_HOME}/dags/.airflowignore
 
-#setting permissions ont root directories for airflow user
+#setting permissions on root directories for airflow user
 RUN chown -R airflow:root ${AIRFLOW_USER_HOME}
 RUN chmod -R 777 ${AIRFLOW_USER_HOME}
 
@@ -99,9 +108,11 @@ USER airflow
 RUN pip3.11 install --no-cache-dir --upgrade pip
 RUN pip3.11 install --no-cache-dir setuptools wheel psycopg2 python-decouple fastf1
 #install from requiremnts.txt to reduce the startup time for airflow scheduler, and install local packages to airflow image
-RUN pip3.11 install --no-cache-dir 'apache-airflow[postgres,celery,redis,amazon,sftp,ftp,http,sqlite,ssh,snowflake,celery,kubernetes,jdbc,s3,rabbitmq]'==${AIRFLOW_VERSION} --constraint ${AIRFLOW_USER_HOME}/requirements/requirements-py3.11.txt 
+RUN pip3.11 install --no-cache-dir 'apache-airflow[postgres,celery,redis,amazon,sftp,ftp,http,sqlite,ssh,celery,kubernetes,jdbc,s3,rabbitmq]'==${AIRFLOW_VERSION} --constraint ${AIRFLOW_USER_HOME}/requirements/requirements-py3.11.txt 
 
 WORKDIR ${AIRFLOW_USER_HOME}
+
+
 
 EXPOSE 8080 8793 5555
 ENTRYPOINT ["/entrypoint.sh"]
