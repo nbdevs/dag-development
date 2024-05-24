@@ -4,6 +4,15 @@ WORKDIR /var/lib/rabbitmq
 
 USER root
 
+# setting up timezone
+ENV TZ=Europe/London
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN apt-get update && apt-get install -y tzdata && \
+    rm /etc/localtime && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata && \
+    apt-get clean
+
 # rabbitmq setup and configuration files
 COPY --chown=rabbitmq:root ./config/definitions.json /etc/rabbitmq/definitions.json
 COPY --chown=rabbitmq:root ./config/rabbitmq.conf /etc/rabbitmq/rabbitmq.conf 
