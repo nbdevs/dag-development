@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from connections import PostgresClient, SnowflakeClient, S3Client
 from colours import Colours
-
+from airflow import DAG
 # --------------------------------------------------------------------------------------------------
 
 
@@ -314,7 +314,7 @@ class DatabaseETL(Processor):
                             str).map(lambda x: x[10:])
 
                     # replace all empty values with NaN
-                    newname.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+                    newname.replace(r'^\s*$', 0, regex=True, inplace=True)
                     listd.append(newname)
 
                 # drivers in a race
@@ -361,7 +361,6 @@ class DatabaseETL(Processor):
                 jam = f1.get_event(season, race)
                 # access by column to get value of race
                 race_name = jam.loc["EventName"]
-                print(race_name)
                 race_name_list.append(race_name)
 
                 ff1 = f1.get_session(season, race, 'R')
@@ -400,8 +399,8 @@ class DatabaseETL(Processor):
                         newname[c] = newname[c].astype(
                             str).map(lambda x: x[10:])
 
-                    # replace all empty values with NaN
-                    newname.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+                    # replace all empty values with 0
+                    newname.replace(r'^\s*$', 0, regex=True, inplace=True)
                     listd.append(newname)
 
                 # drivers in a race
@@ -430,19 +429,19 @@ class DatabaseETL(Processor):
 
         if table_name == "Results":
             dataframe.to_csv('{}/cache/{}Processed/{}-{}.csv'.format(user_home, extract_type, table_name,
-                        extract_dt), index=False, header=True)
+                        extract_dt), index=False, encoding='utf-8', header=True)
         elif table_name == "Qualifying":
             dataframe.to_csv('{}/cache/{}Processed/{}-{}.csv'.format(user_home, extract_type, table_name,
-                        extract_dt), index=False, header=True)
+                        extract_dt), index=False, encoding='utf-8', header=True)
         elif table_name == "Season":
             dataframe.to_csv('{}/cache/{}Processed/{}-{}.csv'.format(user_home, extract_type, table_name,
-                extract_dt), index=False, header=True)
+                extract_dt), index=False, encoding='utf-8', header=True)
         elif table_name == "RaceTelem":
             dataframe.to_csv('{}/cache/{}Processed/{}-{}.csv'.format(user_home, extract_type, table_name,
-                        extract_dt), index=False, header=True)
+                        extract_dt), index=False, encoding='utf-8', header=True)
         elif table_name == "QualifyingTelem":
             dataframe.to_csv('{}/cache/{}Processed/{}-{}.csv'.format(user_home, extract_type, table_name,
-                        extract_dt), index=False, header=True)
+                        extract_dt), index=False, encoding='utf-8', header=True)
         return
 
     def incremental_qualifying(self, ti):
@@ -888,9 +887,9 @@ class DatabaseETL(Processor):
                 quali_telem_table[c] = quali_telem_table[c].astype(
                     str).map(lambda x: x[10:])
 
-            # replace all empty values with NaN
+            # replace all empty values with 0
             quali_telem_table.replace(
-                r'^\s*$', np.nan, regex=True, inplace=True)
+                r'^\s*$', 0, regex=True, inplace=True)
 
             # provide desired column names to dataframe
             quali_telem_table.columns = ["car_no", "lap_time", "lap_no", "s1_time", "s2_time", "s3_time", "compound", "tyre_life", "fresh_set", "race_stint", "team_name",
@@ -1027,7 +1026,7 @@ class DatabaseETL(Processor):
                         logging.info("Dropping columns...")
                         for c in columns:  # dropping irrelevant columns
                             telemetry.drop(c, axis=1, inplace=True)
-                        print(telemetry.columns)
+                      
                         driver_telem = telemetry.reset_index(
                             drop=True)  # dropping index
                         # creating dataframe from dict object
@@ -1078,9 +1077,9 @@ class DatabaseETL(Processor):
             race_telemetry_table[c] = race_telemetry_table[c].astype(
                 str).map(lambda x: x[10:])
 
-        # replace all empty values with NaN
+        # replace all empty values with 0
         race_telemetry_table.replace(
-            r'^\s*$', np.nan, regex=True, inplace=True)
+            r'^\s*$', 0, regex=True, inplace=True)
 
         # provide desired column names
         race_telemetry_table.columns = ["car_no", "lap_time", "lap_no", "time_out", "time_in", "s1_time", "s2_time", "s3_time", "IsPersonalBest", "compound", "tyre_life", "race_stint", "team_name",
@@ -1176,7 +1175,7 @@ class DatabaseETL(Processor):
                         logging.info("Dropping driver telemetry columns...")
                         for c in columns:  # dropping irrelevant columns
                             telemetry.drop(c, axis=1, inplace=True)
-                        print(telemetry.columns)
+                
 
                         driver_telem = telemetry.reset_index(
                             drop=True)  # dropping index
@@ -1229,9 +1228,9 @@ class DatabaseETL(Processor):
                 quali_telemetry_table[c] = quali_telemetry_table[c].astype(
                     str).map(lambda x: x[10:])
 
-            # replace all empty values with NaN
+            # replace all empty values with 0
             quali_telemetry_table.replace(
-                r'^\s*$', np.nan, regex=True, inplace=True)
+                r'^\s*$', 0, regex=True, inplace=True)
 
             # provide desired column names
             quali_telemetry_table.columns = ["car_no", "lap_time", "lap_no", "s1_time", "s2_time", "s3_time", "compound", "tyre_life", "race_stint", "team_name", "driver_identifier",
@@ -1405,9 +1404,9 @@ class DatabaseETL(Processor):
                 race_telem_table[c] = race_telem_table[c].astype(
                     str).map(lambda x: x[10:])
 
-            # replace all empty values with NaN
+            # replace all empty values with 0
             race_telem_table.replace(
-                r'^\s*$', np.nan, regex=True, inplace=True)
+                r'^\s*$', 0, regex=True, inplace=True)
 
             # provide desired column names
             race_telem_table.columns = ["car_no", "lap_time", "lap_no", "time_out", "time_in", "s1_time", "s2_time", "s3_time", "IsPersonalBest", "compound", "tyre_life", "race_stint", "team_name",
