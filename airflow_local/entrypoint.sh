@@ -104,14 +104,18 @@ case "$1" in
     fi
     exec airflow webserver
     ;;
-  scheduler | worker)
+  scheduler)
     # Give the webserver time to run initdb.
     sleep 30
     exec airflow "$@"
     ;;
+  worker)
+    sleep 30
+    exec airflow celery "$@"
+    ;;
   flower)
     sleep 10
-    exec airflow "$@"
+    exec airflow celery "$@" 
     ;;
   version)
     exec airflow "$@"

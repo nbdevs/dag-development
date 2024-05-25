@@ -1,5 +1,3 @@
-version: "3.9"
-
 x-airflow-common: &airflow-common
   build: airflow_local
   env_file:
@@ -20,6 +18,7 @@ x-airflow-common: &airflow-common
   user: ${AIRFLOW_UID}:${AIRFLOW_GID}
   volumes:
     - ./airflow_local/logs:/usr/local/airflow/logs:rw
+    - ./airflow_local/cache:/usr/local/airflow/cache:rw
   depends_on: &airflow-common-depends-on
     postgresmaster:
       condition: service_healthy
@@ -54,7 +53,7 @@ services:
           - pgreplica
 
   postgresmaster:
-    image: nbroj/database-images:prod-db.v6.2.0
+    image: nbroj/database-images:prod-db.v6.7.1
     env_file:
       - .env
     environment:
@@ -76,6 +75,7 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
       - pg_logs:/var/log/postgresql
+      - ./airflow_local/cache:/usr/local/airflow/cache:rw
     command: postgres -c config_file='/etc/postgresql/postgresql.conf' -c hba_file='/etc/postgresql/pg_hba.conf'
     networks:
       default:
@@ -148,6 +148,7 @@ services:
     volumes:
       - ./airflow_local/logs:/usr/local/airflow/logs:rw
       - ./airflow_local/requirements/requirements-py3.11.txt:/usr/local/airflow/requirements/requirements-py3.11.txt
+      - ./airflow_local/cache:/usr/local/airflow/cache:rw
     depends_on:
       <<: *airflow-common-depends-on
 
@@ -166,13 +167,14 @@ services:
     restart: always
     volumes:
       - ./airflow_local/logs:/usr/local/airflow/logs:rw
+      - ./airflow_local/cache:/usr/local/airflow/cache:rw
     depends_on:
       <<: *airflow-common-depends-on
 
   airflow-worker1:
     <<: *airflow-common
     environment: *airflow-common-env
-    command: airflow celery worker
+    command: worker
     restart: always
     depends_on:
       <<: *airflow-common-depends-on
@@ -180,12 +182,12 @@ services:
       - ./airflow_local/logs:/usr/local/airflow/logs:rw
       - ./airflow_local/dags:/usr/local/airflow/dags:rw
       - ./airflow_local/requirements/requirements-py3.11.txt:/usr/local/airflow/requirements/requirements-py3.11.txt
-
+      - ./airflow_local/cache:/usr/local/airflow/cache:rw
   flower:
     <<: *airflow-common
     environment:
       <<: *airflow-common-env
-    command: airflow celery flower -A ${AIRFLOW__CELERY__CELERY_APP_NAME}.app --broker=$AIRFLOW__CELERY__BROKER_API --broker-api=$AIRFLOW__CELERY__BROKER_URL --basic-auth="$RABBITMQ_USER:$RABBITMQ_PASSWORD"
+    command: flower -A $AIRFLOW__CELERY__CELERY_APP_NAME.app --broker=$AIRFLOW__CELERY__BROKER_API --broker-api=$AIRFLOW__CELERY__BROKER_URL --basic-auth="$RABBITMQ_USER:$RABBITMQ_PASSWORD"
     ports:
       - ${FLOWER_PORT}:${FLOWER_PORT}
     healthcheck:

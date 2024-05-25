@@ -484,7 +484,7 @@ orjson==3.9.15
 oss2==2.18.4
 overrides==7.7.0
 packaging==23.2
-pandas==2.1.4
+pandas
 pandas-gbq==0.21.0
 pandas-stubs==2.0.2.230605
 pandocfilters==1.5.1
@@ -531,7 +531,7 @@ pure-sasl==0.6.2
 py-partiql-parser==0.5.1
 py4j==0.10.9.7
 PyAMQP==0.1.0.7
-pyarrow==14.0.2
+pyarrow
 pyarrow-hotfix==0.6
 pyasn1==0.5.1
 pyasn1-modules==0.3.0
