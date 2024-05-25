@@ -1,3 +1,4 @@
+from airflow import DAG
 class Director:
     """ This class coordinates the complete ETL pipeline, from API to DB to DW.
     Two functions for each process to upsert into database, and to effective load the data into data stores and then call 
@@ -119,8 +120,11 @@ class Director:
         qualifying_table = self._db_builder.extract_qualifying_grain(
             self._fl_qualifying_dir, self._start_date, self._end_date)
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._user_home_dir, extract_dt, qualifying_table, "Qualifying", "Full") # function call to store csv file of dataframe content
-
+        try:
+            self._db_builder.csv_producer(self._user_home_dir, extract_dt, qualifying_table, "Qualifying", "Full") # function call to store csv file of dataframe content
+        except Exception as e:
+            logging.error(e)
+            
         return
 
     def full_load_results(self, ti):
@@ -139,8 +143,11 @@ class Director:
         results_table = self._db_builder.extract_race_grain(
             self._fl_results_dir, self._start_date, self._end_date)
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._user_home_dir, extract_dt, results_table, "Results", "Full") # function call to store csv file of dataframe content
-
+        try:
+            self._db_builder.csv_producer(self._user_home_dir, extract_dt, results_table, "Results", "Full") # function call to store csv file of dataframe content
+        except Exception as e:
+            logging.error(e)
+        
         # pushing extract date value to xcoms
         ti.xcom_push(key='extract_date', value=extract_dt)
 
@@ -163,7 +170,10 @@ class Director:
         race_telem_table = self._db_builder.extract_race_telem(
             self._fl_telem_dir, self._start_date, self._end_date)
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._user_home_dir, extract_dt, race_telem_table, "RaceTelemetry", "Full") # function call to store csv file of dataframe content
+        try:
+            self._db_builder.csv_producer(self._user_home_dir, extract_dt, race_telem_table, "RaceTelemetry", "Full") # function call to store csv file of dataframe content
+        except Exception as e:
+            logging.error(e)
 
         return 
 
@@ -185,7 +195,11 @@ class Director:
             self._fl_telem_dir, self._start_date, self._end_date)
         
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._user_home_dir, extract_dt, quali_telem_table, "QualifyingTelemetry", "Full") # function call to store csv file of dataframe content
+        
+        try:
+            self._db_builder.csv_producer(self._user_home_dir, extract_dt, quali_telem_table, "QualifyingTelemetry", "Full") # function call to store csv file of dataframe content
+        except Exception as e:
+            logging.error(e)
         
         # pushing extract date value to xcoms
         ti.xcom_push(key='extract_date', value=extract_dt)
@@ -205,7 +219,7 @@ class Director:
         extract_dt = ti.xcom_pull(task_ids='full_ext_load_race.full_results_load', key='extract_date')
 
         #retrieve load_type 
-        load_type = ti.com_pull(task_ids='retrieve_extract_type', key="extract_format")
+        load_type = ti.xcom_pull(task_ids='retrieve_extract_type', key="extract_format")
         
         # initializing postgres client to generate postgres connection uri
         # calling connection method to get connection string with 1 specified for the database developer privileges
@@ -232,8 +246,11 @@ class Director:
             ti, self._inc_qualifying_dir)
         
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._user_home_dir, extract_dt, qualifying_table, "Qualifying", "Incremental") # function call to store csv file of dataframe content
-       
+        try:
+            self._db_builder.csv_producer(self._user_home_dir, extract_dt, qualifying_table, "Qualifying", "Incremental") # function call to store csv file of dataframe content
+        except Exception as e:
+            logging.error(e)
+        
         return
 
     def inc_results(self, ti):
@@ -252,8 +269,11 @@ class Director:
         # outputs the dataframe for the race result data to be stored in xcoms
         results_table = self._db_builder.incremental_results(ti, self._inc_results_dir)
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._user_home_dir, extract_dt, results_table, "Results", "Incremental") # function call to store csv file of dataframe content
-        
+        try:
+            self._db_builder.csv_producer(self._user_home_dir, extract_dt, results_table, "Results", "Incremental") # function call to store csv file of dataframe content
+        except Exception as e:
+            logging.error(e)
+            
         # pushing extract date value to xcoms
         ti.xcom_push(key='incremental_extract_date', value=extract_dt)
                 
@@ -276,8 +296,11 @@ class Director:
         quali_telem_table = self._db_builder.incremental_quali_telem(
             self._inc_quali_dir, start_date, end_date)
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._user_home_dir, extract_dt, quali_telem_table, "QualifyingTelemetry", "Incremental") # function call to store csv file of dataframe content
-
+        try:
+            self._db_builder.csv_producer(self._user_home_dir, extract_dt, quali_telem_table, "QualifyingTelemetry", "Incremental") # function call to store csv file of dataframe content
+        except Exception as e:
+            logging.error(e)
+            
         return 
 
     def inc_race_telem(self, ti):
@@ -297,8 +320,11 @@ class Director:
         race_telem_table = self._db_builder.incremental_race_telem(
             ti, self._inc_racetelem_dir)
         logging.info("Serialising dataframe to CSV...")
-        self._db_builder.csv_producer(self._user_home_dir, extract_dt, race_telem_table, "RaceTelemetry", "Incremental") # function call to store csv file of dataframe content
-        
+        try:
+            self._db_builder.csv_producer(self._user_home_dir, extract_dt, race_telem_table, "RaceTelemetry", "Incremental") # function call to store csv file of dataframe content
+        except Exception as e:
+            logging.error(e)
+            
         return 
 
     def inc_load_upsert(self, ti):
