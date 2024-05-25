@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator, ShortCircuitOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
-from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
 from airflow.models import Pool
 
 from processor import DatabaseETL, WarehouseETL
@@ -10,7 +9,7 @@ from director import Director
 from colours import Colours
  
 # Initializing global variables for duration of data collection
-start_date = 2018 # telemetry data only available from 2019 onwards for races
+start_date = 2022 # telemetry data only available from 2019 onwards for races
 end_date = 2024
 
 # Instantiating classes used within the ETL process
@@ -22,7 +21,7 @@ db_director = Director(start_date, end_date, col, db_handler, dw_handler)
 
 # Defining baseline arguments for DAGs
 default_args = {
-    'start_date': datetime(2024, 4, 9),
+    'start_date': datetime(2024, 5, 12),
     'schedule_interval': 'None', # change this back to weekly after 
     'catchup_by_default': False,
     'do_xcom_push': True,
@@ -101,4 +100,4 @@ with DAG(
 # Defining task dependencies
 
 retrieve_extraction_type >> determine_extraction_format >> full_extraction_load_season >> full_extraction_load_race >> full_extraction_load_pre_transf >> full_transformation >> create_champ_views 
-retrieve_extraction_type >> determine_extraction_format >> incremental_extraction_load_race >> incremental_extraction_load_pre_transf >> change_data_capture >> changed_data_detected >> incremental_transformation >> create_champ_views 
+retrieve_extraction_type >> determine_extraction_format >> incremental_extraction_load_race >> incremental_extraction_load_pre_transf >> change_data_capture >> changed_data_detected >> incremental_transformation >> create_champ_views
