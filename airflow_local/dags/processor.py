@@ -308,13 +308,12 @@ class DatabaseETL(Processor):
 
         # drop session 1,2,3, and dates, f1api support, officialeventname from season data
         logging.info("Dropping columns...")
-        columns = ["OfficialEventName", "Session1", "Session1Date", "Session2", "Session2Date", "Session3", "Session3Date", "Session4", "Session5",
-                   "F1ApiSupport", "EventFormat", "EventDate", "Session1DateUtc", "Session2DateUtc", "Session3DateUtc", "Session4DateUtc", "Session5DateUtc"]
+        columns = ["Session1", "Session1Date", "Session2", "Session2Date", "Session3", "Session3Date", "F1ApiSupport", "EventFormat", "Session4", "Session5", 'Session1DateUtc',
+                'Session2DateUtc', 'Session3DateUtc', 'Session4Date', 'Session4DateUtc','Session5Date', 'Session5DateUtc', "OfficialEventName"]
         season.drop(columns, axis=1, inplace=True)
 
         # rename columns
-        season.columns = ["race_round", "country", "city",
-                          "race_name", "quali_date", "races_date", "season_year"]
+        season.columns = ["race_round", "country", "city", "races_date", "race_name", "season_year"]
         season.index += 1
         season.index.name = "race_id"
 
