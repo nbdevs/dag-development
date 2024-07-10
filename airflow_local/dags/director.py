@@ -44,6 +44,7 @@ class Director:
         self._inc_processed_dir = config("inc_processed_dir")
         self._pathway = config("pathway")
         self._user_home_dir = config("user_home")
+        self._file_array = ["Results", "Season", "Qualifying", "Telemetry"]
 
     def retrieve_extract_type(self, ti):
         """This function determines the extract format of the load cycle.
@@ -212,19 +213,26 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-  
-        logging.info("Upserting data into Postgres")
-
+        
         # retrieving the extract_date of the last load from xcom
         extract_dt = ti.xcom_pull(task_ids='full_ext_load_race.full_results_load', key='extract_date')
 
         #retrieve load_type 
         load_type = ti.xcom_pull(task_ids='retrieve_extract_type', key="extract_format")
         
+        logging.info("Upserting data into Postgres...")
+
         # initializing postgres client to generate postgres connection uri
         # calling connection method to get connection string with 1 specified for the database developer privileges
         pg_conn_uri = self._postgres.connection_factory(1, self._col)
         self._postgres.upsert_db(pg_conn_uri, self._inc_processed_dir, self._full_processed_dir, extract_dt, load_type)
+        
+        # clean up cache folder 
+        pathway = "cache"
+        logging.info("[CACHE CLEANUP] Beginning cleaning post-process...")
+        home_dir = self._user_home_dir + f'/{pathway}'
+        self._db_builder.cache_cleaner(load_type, home_dir, "cloud", pathway)
+        logging.info("[CACHE CLEANUP] Cleanup post-process completed.")
 
         return
 
@@ -333,8 +341,6 @@ class Director:
         a ti argument for a reference to the task instance of the current running instance"""
 
         import logging
-    
-        logging.info("Upserting data into Postgres ")
         
         determinant = self._db_builder.determine_load_date(self._pathway) # function call for determining load_date
         
@@ -345,11 +351,20 @@ class Director:
             
         # retrieve load_type 
         load_type = ti.com_pull(task_ids='retrieve_extract_type', key="extract_format")
-    
+
+        logging.info("Upserting data into Postgres...")
+        
         # initializing postgres client to generate postgres connection uri
         # calling connection method to get connection string with 1 specified for the database developer privileges
         pg_conn_uri = self._postgres.connection_factory(1, self._col)
         self._postgres.upsert_db(pg_conn_uri, ti, self._inc_processed_dir, self._full_processed_dir, extract_dt, load_type)
+        
+        # clean up cache folder 
+        pathway = "cache"
+        logging.info("[CACHE CLEANUP] Beginning cleaning post-process...")
+        home_dir = self._user_home_dir + f'/{pathway}'
+        self._db_builder.cache_cleaner(load_type, home_dir, "cloud", pathway)
+        logging.info("[CACHE CLEANUP] Cleanup post-process completed.")
  
         return
 
