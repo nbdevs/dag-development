@@ -91,7 +91,7 @@ apache-airflow-providers-pgvector==1.1.0
 apache-airflow-providers-pinecone==1.1.2
 apache-airflow-providers-postgres==5.10.1
 apache-airflow-providers-presto==5.4.1
-apache-airflow-providers-redis==3.6.0
+apache-airflow-providers-redis
 apache-airflow-providers-salesforce==5.6.2
 apache-airflow-providers-samba==4.5.0
 apache-airflow-providers-segment==3.4.0
@@ -595,7 +595,7 @@ QtPy==2.4.1
 rapidfuzz==3.6.1
 reactivex==4.0.4
 readme-renderer==42.0
-redis==4.6.0
+redis
 redshift-connector==2.1.0
 referencing==0.31.1
 regex==2023.12.25
