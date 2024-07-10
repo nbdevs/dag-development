@@ -16,6 +16,14 @@ class Processor(ABC):
     import pandas as pd
 
     @abstractmethod
+    def path_generator(self, load_type, home_dir, network_scope, pathway):
+        pass
+    
+    @abstractmethod
+    def cache_cleaner(self, load_type, home_dir, network_scope, pathway):
+        pass
+    
+    @abstractmethod
     def is_not_empty(self, s):
         pass
 
@@ -105,7 +113,87 @@ class DatabaseETL(Processor):
         """Each new instance contains a colours class for formatting logging info."""
         self._col = col
         self._dt_format = '%Y-%m-%d'
+    
+    def path_generator(self, load_type, home_dir, network_scope, pathway) -> list[str]:
+        """  This function is responsible for generating the file paths for all the directories 
+        that are going to be cleaned up after ETL. 
+        Takes four inputs:
+        -load_type refers to full or incremental load
+        -home_dir refers to the file path for home directory on local machine or on linux machine
+        -network scope refers to whether the cleanup is taking place locally or on linux machine
+        -pathway refers to whether cache files or log files are being cleaned - with cache files needing to be cleaned more 
+        frequently distinction was needed between them.
+        Returns a list of strings containing all the file paths. """
+        
+        paths = [] # outer array to store the baseline file paths for both logs and cache files
+        if pathway == "cache": # if the path says to clean up cache files 
+            if network_scope == "local": # ascertain whether this is happen locally and generate file paths
+                for i in range(0,len(load_type)):
+                    paths.append(f'{home_dir[0]}/{load_type[i]}/')     #load type refers to a list which differs for both logs and cache file cleanup
+            elif network_scope == "cloud": # or on linux machine and generate file paths
+                for i in range(0,len(load_type)):
+                    paths.append(f'{home_dir[1]}/{load_type[i]}/')
+            
+            complete_paths = [] # outer array
+            # arrays containing the names of subfolders within main directory
+            full_cache_array = ["Results", "Season", "Qualifying", "Telemetry"]
+            incremental_cache_array = ["Qualifying", "QualiTelem", "RaceTelem", "Results"]
 
+            for i in range(0,len(full_cache_array)):
+                # join the subdirectories to the main dirrctories to create the complete file paths.
+                complete_paths.append(paths[0] + full_cache_array[i])
+                complete_paths.append(paths[1] + incremental_cache_array[i])
+                if i == 2: # when it is cleaning up the FullProcessed directory perform these extra steps
+                    complete_paths.append(paths[0] + full_cache_array[i])
+                    complete_paths.append(paths[1] + incremental_cache_array[i])
+                    complete_paths.append(paths[i])
+                if i == 3: # when cleaning up IncrementalProcessed directory perform these extra steps 
+                    complete_paths.append(paths[0] + full_cache_array[i])
+                    complete_paths.append(paths[1] + incremental_cache_array[i])
+                    complete_paths.append(paths[i])
+            
+            return complete_paths
+        
+        elif pathway == "logs": # cleanup of log files/folders
+            if network_scope == "local": # ascertain whether this is happening locally and generate file paths
+                for i in range(0,len(load_type)):
+                    paths.append(f'{home_dir[0]}/{load_type[i]}/')    
+            elif network_scope == "cloud": # or on linux machine and generate file paths 
+                for i in range(0,len(load_type)):
+                    paths.append(f'{home_dir[1]}/{load_type[i]}/') # load type refers to a list fo subdirectories in the logs folder
+            
+            return paths
+        
+    def cache_cleaner(self, load_type, home_dir, network_scope, pathway) -> None:
+        """This function performs the cleaning of the cache folder. 
+        Takes four inputs:
+        -load_type: a list containing subdirectories within the cache folder to clean up 
+        -home_dir: the path to the home directory on the machine
+        -network_scope: determines whether cleanup is happening locally or on linux machine
+        -pathway: determines whether a cache or log clean is occurring in the path generator function"""
+        
+        import os 
+        import shutil 
+        
+        paths = self.path_generator(load_type, home_dir, network_scope, pathway) #function call to generate list of directories.
+            
+        for i in range(0, len(paths)):
+            cache_files = os.listdir(paths[i]) #turn paths into directory tree
+            for f in cache_files: #iterate through each folder/file in directory
+                if os.path.isfile(f) and not "DS_Store" in f: # if item is a file 
+                    try:
+                        new_file = paths[i] + "/" + f # create the full file path
+                        os.remove(new_file) # remove file from the folder
+                    except FileNotFoundError:
+                        shutil.rmtree(new_file)
+                elif not os.path.isfile(f) and "DS_Store" not in f: # if item not a file then it is a folder 
+                    try:
+                        new_file = paths[i] + "/" + f # create full folder path
+                        shutil.rmtree(new_file) # remove folder contents recursively 
+                    except NotADirectoryError as e: # if it not a folder, is it a csv or .log file
+                        os.remove(new_file)
+        return
+            
     def is_not_empty(self, s, pathway):
         """ Function responsible for detecting presence of white space or emptiness in contents of a file.
         Will then be used to determine which pathway should be followed for ETL. 
@@ -1442,7 +1530,13 @@ class WarehouseETL(Processor):
     def __init__(self, col) -> pd.DataFrame:
         """Each new instance contains a colours class used for formatting."""
         self._col = col
-
+        
+    def path_generator(self, load_type, home_dir, network_scope, pathway):
+        pass
+    
+    def cache_cleaner(self, load_type, home_dir, network_scope, pathway):
+        pass
+    
     def is_not_empty(self, s):
         pass
 
