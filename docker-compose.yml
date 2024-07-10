@@ -53,7 +53,7 @@ services:
           - pgreplica
 
   postgresmaster:
-    image: nbroj/database-images:prod-db.v6.7.4
+    image: nbroj/database-images:prod-db.v7.1.4
     env_file:
       - .env
     environment:
