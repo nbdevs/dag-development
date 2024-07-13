@@ -362,8 +362,10 @@ class Director:
         
         # clean up cache folder 
         pathway = "cache"
+        home_path_cache = self._user_home_dir + f'/{pathway}'
+        home_dir = [home_path_cache,""]
         logging.info("[CACHE CLEANUP] Beginning cleaning post-process...")
-        home_dir = self._user_home_dir + f'/{pathway}'
+        home_dir = [home_path_cache, ""]
         self._db_builder.cache_cleaner(load_type, home_dir, "cloud", pathway)
         logging.info("[CACHE CLEANUP] Cleanup post-process completed.")
  
