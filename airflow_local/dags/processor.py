@@ -308,22 +308,25 @@ class DatabaseETL(Processor):
 
         # drop session 1,2,3, and dates, f1api support, officialeventname from season data
         logging.info("Dropping columns...")
+     
         columns = ["Session1", "Session1Date", "Session2", "Session2Date", "Session3", "Session3Date", "F1ApiSupport", "EventFormat", "Session4", "Session5", 'Session1DateUtc',
-                'Session2DateUtc', 'Session3DateUtc', 'Session4Date', 'Session4DateUtc','Session5Date', 'Session5DateUtc', "OfficialEventName"]
+       'Session2DateUtc', 'Session3DateUtc', 'Session4DateUtc', 'Session5DateUtc', "OfficialEventName", "EventDate"]
+
         season.drop(columns, axis=1, inplace=True)
 
         # rename columns
-        season.columns = ["race_round", "country", "city", "races_date", "race_name", "season_year"]
+        season.columns = ["race_round", "country", "city", "race_name", "quali_date", "races_date", "season_year"]
         season.index += 1
         season.index.name = "race_id"
 
         # splitting the date and time apart
         try:
+            season["races_date"] = pd.to_datetime(season["races_date"], utc=True)
             season["race_date"] = pd.to_datetime(season['races_date']).dt.date
             season["race_time"] = pd.to_datetime(season["races_date"]).dt.time
-            season["quali_date"] = pd.tp_datetime(season["quali_date"]).dt.date
+            season["quali_date"] = pd.to_datetime(season["quali_date"]).dt.date
 
-        except ValueError:
+        except ValueError: # if NaN replace with 0 value entry.
 
             season["race_date"] = 0
             season["race_time"] = 0
