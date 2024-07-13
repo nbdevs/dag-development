@@ -332,7 +332,10 @@ class DatabaseETL(Processor):
             season["race_time"] = 0
             season["quali_date"] = 0
 
+        # further cleaning of data removing erroneous rows and columns and resetting index to 1. 
         season.drop("races_date", axis=1, inplace=True)
+        season.drop(season[season.race_round < 1].index, inplace=True)
+        season.index-=1
 
         return season
 
