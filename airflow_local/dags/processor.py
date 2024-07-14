@@ -284,144 +284,205 @@ class DatabaseETL(Processor):
             takes a target cache directory as the input for first variable,
             start date and end date for extraction of f1 data as the next two. """
 
+        import fastf1 as f1 
+        import requests as r 
+        import json 
         import logging
-        import fastf1 as f1
         import pandas as pd
-
-        logging.info(
-            "------------------------------Extracting Aggregated Season Data--------------------------------------")
-
+        
+        #Initialising variables and arrays
+        event = 'results'
+        race_list = []
+        track_holder = []
+        j = 1 # counter variable
         # enable cache for faster data retrieval
         f1.Cache.enable_cache(cache_dir)
 
-        data_holder = []
-        # outer for loop for seasons
+        logging.info(
+                    "------------------------------Extracting Aggregated Season Data--------------------------------------")
+
+        #outer for loop for seasons
         for s in range(start_date, end_date):
             size = f1.get_event_schedule(s)
-            size["season_year"] = s
-            data_holder.append(size)
+            
+            # get the number of races in the season by getting all race rounds greater than 0
+            race_no = size.query("RoundNumber > 0").shape[0]
+      
+            #get all the names of the races for this season
+            for i in range(1, race_no):
+                # string url to produce json response by appending .json with request 
+                race_string = 'https://ergast.com/api/f1/{0}/{1}/{2}.json?limit=1000'.format(s, i, event)
+                
+                # exception handling for requests 
+                try:
+                    # get response object then convert to text to then load to python dict obj
+                    race = r.get(race_string, headers={'Authorization':'{0}' '{1}'.format('Accept', 'application/json'), 'Content-Type': 'application/json'})
+                    race.raise_for_status() # generate status code to see if successful request recieved
+                    try:
+                        t = race.text # generate text from response object
+                        race_j = json.loads(t) # load to python dict obj 
+                    except r.exceptions.JSONDecodeError as e:
+                        print("Empty JSON response.")
+                        logging.warning(e)
+                    
+                except r.exceptions.HTTPError as http_err:
+                    print("Status code exceeded acceptable range: 200 <= x < 300 [Status code", race.status_code, "]")
+                    logging.warning(http_err)
+            
+                except ConnectionError as conn_err:
+                    logging.warning(conn_err)
+            
+                else:     
+            
+                    if not race_j["MRData"]: # dict is empty
+                        logging.critical("Empty JSON")
+                        
+                    else: # dict is not empty 
+            
+                        try: # get the name of the race to indicate a valid repsonse
+        
+                            season_year = race_j["MRData"]["RaceTable"]["season"]
+                            race_round = race_j["MRData"]["RaceTable"]["round"]
+                
+                            for i in range (0, len(race_j["MRData"]["RaceTable"]["Races"])): # get data for each race weekend
+                                race_date = race_j["MRData"]["RaceTable"]["Races"][i]["date"]
+                                race_t= race_j["MRData"]["RaceTable"]["Races"][i]["time"]
+                                race_time = race_t.replace("Z", "")
+                                country = race_j["MRData"]["RaceTable"]["Races"][i]["Circuit"]["Location"]["country"]
+                                city = race_j["MRData"]["RaceTable"]["Races"][i]["Circuit"]["Location"]["locality"]
+                                race_name = race_j["MRData"]["RaceTable"]["Races"][i]["raceName"]  
+                                track_name = race_j["MRData"]["RaceTable"]["Races"][i]["Circuit"]["circuitName"]
+                        
+                                race_n = {"season_year" : season_year , "race_name": race_name, "track_name": track_name, "race_round" : race_round, "race_date" : race_date, 
+                                "race_time": race_time, "country": country, "city": city} # sort data into dict 
+                                track_holder.append(race_n) # append dict to array 
 
-        # CREATE data frame for season data
-        for d in data_holder:
+                                j+=1 # increment counter variable
+                        except KeyError as msg:
+                            logging.error(msg)
 
-            season = pd.concat(data_holder)
-
-        # drop session 1,2,3, and dates, f1api support, officialeventname from season data
-        logging.info("Dropping columns...")
-     
-        columns = ["Session1", "Session1Date", "Session2", "Session2Date", "Session3", "Session3Date", "F1ApiSupport", "EventFormat", "Session4", "Session5", 'Session1DateUtc',
-       'Session2DateUtc', 'Session3DateUtc', 'Session4DateUtc', 'Session5DateUtc', "OfficialEventName", "EventDate"]
-
-        season.drop(columns, axis=1, inplace=True)
-
-        # rename columns
-        season.columns = ["race_round", "country", "city", "race_name", "quali_date", "races_date", "season_year"]
-        season.index += 1
-        season.index.name = "race_id"
-
-        # splitting the date and time apart
-        try:
-            season["races_date"] = pd.to_datetime(season["races_date"], utc=True)
-            season["race_date"] = pd.to_datetime(season['races_date']).dt.date
-            season["race_time"] = pd.to_datetime(season["races_date"]).dt.time
-            season["quali_date"] = pd.to_datetime(season["quali_date"]).dt.date
-
-        except ValueError: # if NaN replace with 0 value entry.
-
-            season["race_date"] = 0
-            season["race_time"] = 0
-            season["quali_date"] = 0
-
-        # further cleaning of data removing erroneous rows and columns and resetting index to 1. 
-        season.drop("races_date", axis=1, inplace=True)
-        season.drop(season[season.race_round < 1].index, inplace=True)
-        season.index-=1
-
+        season = pd.DataFrame(track_holder)
+        season.index +=1
+        
         return season
+        
 
     def extract_qualifying_grain(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         """ Extracts the qualifying/driver aggregated data from the api and stores in the dataframe.
             Takes a target cache directory as the first variable
             start date and end date date for data extraction for the rest."""
-
+            
+        import fastf1 as f1 
+        import requests as r 
+        import json 
         import logging
-        import fastf1 as f1
-        import pandas as pd
-        import numpy as np
+        import pandas as pd 
+
+        # Initialising variables and arrays
+        event = 'qualifying'
+        race_list = []
+        track_holder = []
+        j = 1 # counter variable
+        f1.Cache.enable_cache(cache_dir) # enable cache for faster data retrieval
 
         logging.info(
             "------------------------------Extracting Aggregated Qualifying Data--------------------------------------")
 
-        # enable cache for faster data retrieval
-        f1.Cache.enable_cache(cache_dir)
-        ultimate = []  # empty list to store dataframe for all results across multiple seasons
-
-        # outer for loop for seasons
+        #outer for loop for seasons
         for s in range(start_date, end_date):
             size = f1.get_event_schedule(s)
-
+            
             # get the number of races in the season by getting all race rounds greater than 0
             race_no = size.query("RoundNumber > 0").shape[0]
-            race_name_list = []  # empty list for storing races
-            final = []  # empty list for aggregated race data for all drivers during season
+            race_name_list = [] # empty list for storing races 
+            final = []
 
-            # get all the names of the races for this season
+            #get all the names of the races for this season
             for i in range(1, race_no):
+                # string url to produce json response by appending .json with request 
+                race_string = 'https://ergast.com/api/f1/{0}/{1}/{2}.json?limit=1000'.format(s, i, event)
+                
+                # exception handling for requests 
+                try:
+                    # get response object then convert to text to then load to python dict obj
+                    race = r.get(race_string, headers={'Authorization':'{0}' '{1}'.format('Accept', 'application/json'), 'Content-Type': 'application/json'})
+                    race.raise_for_status() # generate status code to see if successful request recieved
+                    try:
+                        t = race.text # generate text from response object
+                        race_j = json.loads(t) # load to python dict obj 
+                    except r.exceptions.JSONDecodeError as e:
+                        print("Empty JSON response.")
+                        logging.warning(e)
+                        break
+                    
+                except r.exceptions.HTTPError as http_err:
+                    print("Status code exceeded acceptable range: 200 <= x < 300 [Status code", race.status_code, "]")
+                    logging.warning(http_err)
+            
+                except ConnectionError as conn_err:
+                    logging.warning(conn_err)
+            
+                else:     
+            
+                    if not race_j["MRData"]: # dict is empty
+                        logging.critical("Empty JSON")
+                        
+                    else: # dict is not empty 
+            
+                        try: # get the name of the race to indicate a valid response
+        
+                            season_year = race_j["MRData"]["RaceTable"]["season"]
+                            race_round = race_j["MRData"]["RaceTable"]["round"]
+                
+                            for i in range (0, len(race_j["MRData"]["RaceTable"]["Races"])): # get data for each race weekend
+                                quali_date = race_j["MRData"]["RaceTable"]["Races"][i]["date"]
+                                quali_t= race_j["MRData"]["RaceTable"]["Races"][i]["time"]
+                                quali_time = quali_t.replace("Z", "")
+                                country = race_j["MRData"]["RaceTable"]["Races"][i]["Circuit"]["Location"]["country"]
+                                city = race_j["MRData"]["RaceTable"]["Races"][i]["Circuit"]["Location"]["locality"]
+                                race_name = race_j["MRData"]["RaceTable"]["Races"][i]["raceName"]  
+                                track_name = race_j["MRData"]["RaceTable"]["Races"][i]["Circuit"]["circuitName"]
+                        
+                                for j in range (0, len(race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"])): # get qualifying results for each driver in a race weekend
+                                    quali_pos = race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"][j]["position"]
+                                    car_no = race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"][j]["Driver"]["permanentNumber"]
+                                    driver_id = race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"][j]["Driver"]["code"]
+                                    forename = race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"][j]["Driver"]["givenName"]
+                                    surname = race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"][j]["Driver"]["familyName"]
+                                    driver_nationality = race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"][j]["Driver"]["nationality"]
+                                    date_of_birth = race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"][j]["Driver"]["dateOfBirth"]
+                                    team_name = race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"][j]["Constructor"]["name"]
+                                    team_nationality = race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"][j]["Constructor"]["nationality"]
+                                    try:
+                                        best_q1 = race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"][j]["Q1"]
+                                    except KeyError:
+                                        logging.error(f' Q1 data not available for {forename} {surname} - Car {car_no} - for the {race_name}.')
+                                        best_q1 = '0:00.000'
+                                    try:
+                                        best_q2 = race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"][j]["Q2"]
+                                    except KeyError:
+                                        logging.error(f' Q2 data not available for {forename} {surname} - Car {car_no} - for the {race_name}.')
+                                        best_q2 = '0:00.000'
+                                    try:
+                                        best_q3 = race_j["MRData"]["RaceTable"]["Races"][i]["QualifyingResults"][j]["Q3"]
+                                    except KeyError:
+                                        logging.error(f' Q3 data not available for {forename} {surname} - Car {car_no} - for the {race_name}.')
+                                        best_q3 = '0:00.000'
+                                        
+                                    quali_n = {"season_year" : season_year , "race_name" : race_name, "track_name": track_name, "race_round" : race_round, "quali_date" : quali_date, 
+                                "quali_time": quali_time, "country": country, "city" : city, "quali_pos" : quali_pos, "car_no" : car_no, "driver_id" : driver_id, "forename" : forename, "surname": surname, 
+                                            "driver_nationality" : driver_nationality, "date_of_birth": date_of_birth, "team_name" : team_name, "team_nationality": team_nationality, "best_q1": best_q1,
+                                            "best_q2" : best_q2, "best_q3" : best_q3} # sort data into dict 
+                                    track_holder.append(quali_n) # append dict to array 
+                                
+                                j+=1 # increment counter variable
+                        except ValueError as msg:
+                            logging.critical(msg)
 
-                jam = f1.get_event(s, i)
-                # access by column to get value of race
-                race_name = jam.loc["EventName"]
-                race_name_list.append(race_name)
+        qualifying_table = pd.DataFrame(track_holder)
+        qualifying_table.index +=1
 
-                ff1 = f1.get_session(s, i, 'Q')
-                # load all driver information for session
-                ff1.load()
-                drivers = ff1.drivers
-                listd = []
-                # loop through every driver in the race
-                for d in drivers:
-
-                    name = ff1.get_driver(d)
-                    newname = name.to_frame().T  # invert columns and values
-
-                    columns = ["BroadcastName", "Time", "FullName", "Status", "Points", "GridPosition",
-                               "HeadshotUrl", "CountryCode", "ClassifiedPosition", "Abbreviation", "TeamId"]
-
-                    logging.info("Dropping columns...")
-                    # drop irrelevant columns
-                    for c in columns:
-                        newname.drop(c, axis=1, inplace=True)
-
-                    # provide desired column names
-                    newname.columns = ["car_number", "driver_id", "team_name", "team_colour",
-                                       "forename", "surname", "quali_pos", "best_q1", "best_q2", "best_q3"]
-                    # provide new index
-                    newname.index.name = "driver_id"
-
-                    newname["season_year"] = s
-                    newname["race_name"] = race_name
-                    # convert time deltas to strings and reformat
-                    col = ["best_q1", "best_q2", "best_q3"]
-                    for c in col:
-                        newname[c] = newname[c].astype(
-                            str).map(lambda x: x[10:])
-
-                    # replace all empty values with NaN
-                    newname.replace(r'^\s*$', 0, regex=True, inplace=True)
-                    listd.append(newname)
-
-                # drivers in a race
-                driver_data = pd.concat(listd)
-                final.append(driver_data)
-
-            # all races in a season
-            processed_data = pd.concat(final)
-            ultimate.append(processed_data)
-
-        # multiple seasons
-        quali_table = pd.concat(ultimate)
-
-        return quali_table
+        return qualifying_table
 
     def extract_race_grain(self, cache_dir, start_date, end_date) -> pd.DataFrame:
         """ Extracts race/result aggregated data and stores in pandas dataframe"""
@@ -789,7 +850,8 @@ class DatabaseETL(Processor):
 
                                 race_season = race['season']
                                 race_name = race['raceName']
-
+                                track_name = race['Circuit']['circuitName']
+                   
                                 for results in race['Results']:
 
                                     driver_name = results['Driver']['familyName']
@@ -808,10 +870,10 @@ class DatabaseETL(Processor):
                                         # set the fastest_lap to 0
                                         debug_print(results, str(err))
                                         logging.info(
-                                            "Setting fastest lap as 0 for driver.")
-                                        fastest_lap = 0
+                                            f"No laptime available for {driver_name} - setting fastest lap to 0.0.")
+                                        fastest_lap = 0.0
 
-                                    race_n = {"race_id": race_name, "quali_date": race['date'], "season_year": race_season,
+                                    race_n = {"race_id": race_name, "track_name": track_name, "quali_date": race['date'], "season_year": race_season,
                                               "driver_name": driver_name, "driver_no": driver_no, "driver_identifier": driver_identifier,
                                               "team_name": team_name, "start_pos": start_pos, "finishing_pos": finishing_pos, "fastest_lap": fastest_lap,
                                               "points": points, "race_status": race_status}
