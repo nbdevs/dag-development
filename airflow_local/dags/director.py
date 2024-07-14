@@ -228,11 +228,11 @@ class Director:
         self._postgres.upsert_db(pg_conn_uri, self._inc_processed_dir, self._full_processed_dir, extract_dt, load_type)
         
         # clean up cache folder 
-        pathway = "cache"
+        pathway = 'cache'
         logging.info("[CACHE CLEANUP] Beginning cleaning post-process...")
         home_path_cache = self._user_home_dir + f'/{pathway}'
-        home_dir = [home_path_cache,""]
-        self._db_builder.cache_cleaner(load_type, home_dir, "cloud", pathway)
+        home_dir = [home_path_cache, ""]
+        self._db_builder.cache_cleaner(load_type, home_dir[0], "cloud", pathway)
         logging.info("[CACHE CLEANUP] Cleanup post-process completed.")
 
         return
@@ -366,7 +366,7 @@ class Director:
         home_dir = [home_path_cache,""]
         logging.info("[CACHE CLEANUP] Beginning cleaning post-process...")
         home_dir = [home_path_cache, ""]
-        self._db_builder.cache_cleaner(load_type, home_dir, "cloud", pathway)
+        self._db_builder.cache_cleaner(load_type, home_dir[0], "cloud", pathway)
         logging.info("[CACHE CLEANUP] Cleanup post-process completed.")
  
         return
