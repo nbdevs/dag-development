@@ -129,10 +129,10 @@ class DatabaseETL(Processor):
         if pathway == "cache": # if the path says to clean up cache files 
             if network_scope == "local": # ascertain whether this is happen locally and generate file paths
                 for i in range(0,len(load_type)):
-                    paths.append(f'{home_dir[0]}/{load_type[i]}/')     #load type refers to a list which differs for both logs and cache file cleanup
+                    paths.append(f'{home_dir}/{load_type[i]}/')     #load type refers to a list which differs for both logs and cache file cleanup
             elif network_scope == "cloud": # or on linux machine and generate file paths
                 for i in range(0,len(load_type)):
-                    paths.append(f'{home_dir[1]}/{load_type[i]}/')
+                    paths.append(f'{home_dir}/{load_type[i]}/')
             
             complete_paths = [] # outer array
             # arrays containing the names of subfolders within main directory
@@ -298,8 +298,7 @@ class DatabaseETL(Processor):
         # enable cache for faster data retrieval
         f1.Cache.enable_cache(cache_dir)
 
-        logging.info(
-                    "------------------------------Extracting Aggregated Season Data--------------------------------------")
+        logging.info("------------------------------Extracting Aggregated Season Data--------------------------------------")
 
         #outer for loop for seasons
         for s in range(start_date, end_date):
@@ -498,13 +497,10 @@ class DatabaseETL(Processor):
 
         # outer for loop for seasons
         for season in range(start_date, end_date):
-            size = f1.get_event_schedule(season)
+            event_schedule = f1.get_event_schedule(season)
 
             # get the number of races in the season by getting all race rounds greater than 0
-            race_no = size.query("RoundNumber > 0").shape[0]
-
-            if season == end_date:
-                incremental_race_counter = race_no
+            race_no = event_schedule.query("RoundNumber > 0").shape[0]
 
             race_name_list = []  # empty list for storing races
             final = []  # empty list for aggregated race data for all drivers during season
@@ -530,7 +526,7 @@ class DatabaseETL(Processor):
                     newname = name.to_frame().T  # invert columns and values
 
                     columns = ["BroadcastName", "FullName", "Q1", "Q2", "Q3", "Abbreviation",
-                               "CountryCode", "TeamId", "TeamColor", "HeadshotUrl", "ClassifiedPosition"]
+                               "CountryCode", "TeamId", "DriverId", "TeamColor", "HeadshotUrl", "ClassifiedPosition"]
 
                     logging.info("Dropping columns...")
                     # drop irrelevant columns
@@ -538,23 +534,31 @@ class DatabaseETL(Processor):
                         newname.drop(c, axis=1, inplace=True)
 
                     # provide desired column names
-                    newname.columns = ["car_number", "driver_id", "team_name", "forename", "surname",
-                                       "finish_pos", "start_pos", "Time", "driver_status_update", "race_points"]
+                    newname.columns = ["car_number", "team_name", "forename", "surname",
+                                       "finish_pos", "start_pos", "race_time", "driver_status_update", "race_points"]
                     # provide new index
                     newname.index.name = "driver_id"
 
-                    newname["pos_change"] = newname["start_pos"] - newname["finish_pos"]
-                    newname["season_year"] = season
-                    newname["race_name"] = race_name
+                    try:
+                        newname["finish_pos"] = pd.to_numeric(newname["finish_pos"])
+                        newname["pos_change"] =  newname["start_pos"] - newname["finish_pos"]
+                        newname["season_year"] = season
+                        newname["race_name"] = race_name
+                    except ValueError:
+                        logging.error(f' Classification data not available for {newname.iloc[-1]["forename"]} {newname.iloc[-1]["surname"]} - Car {newname.iloc[-1]["car_number"]} due to retirement from the {race_name}.')
+                        newname["pos_change"] = "R"
+                        newname["season_year"] = season
+                        newname["race_name"] = race_name
+                    
                     # convert time deltas to strings and reformat
-                    col = ["Time"]
+                    col = ["race_time"]
 
                     for c in col:
                         newname[c] = newname[c].astype(
                             str).map(lambda x: x[10:])
 
                     # replace all empty values with 0
-                    newname.replace(r'^\s*$', 0, regex=True, inplace=True)
+                    newname.replace(r'^\s*$', 0.0, regex=True, inplace=True)
                     listd.append(newname)
 
                 # drivers in a race
