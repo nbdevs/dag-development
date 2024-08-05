@@ -220,6 +220,8 @@ class Director:
         #retrieve load_type 
         load_type = ti.xcom_pull(task_ids='retrieve_extract_type', key="extract_format")
         
+        load_type_array = [load_type, "Incremental", "FullProcessed", "IncrementalProcessed"]
+        
         logging.info("Upserting data into Postgres...")
 
         # initializing postgres client to generate postgres connection uri
@@ -232,7 +234,7 @@ class Director:
         logging.info("[CACHE CLEANUP] Beginning cleaning post-process...")
         home_path_cache = self._user_home_dir + f'/{pathway}'
         home_dir = [home_path_cache, ""]
-        self._db_builder.cache_cleaner(load_type, home_dir[0], "cloud", pathway)
+        self._db_builder.cache_cleaner(load_type_array, home_dir[0], "cloud", pathway)
         logging.info("[CACHE CLEANUP] Cleanup post-process completed.")
 
         return
@@ -352,6 +354,8 @@ class Director:
             
         # retrieve load_type 
         load_type = ti.com_pull(task_ids='retrieve_extract_type', key="extract_format")
+        load_type_array = ["Full", load_type, "FullProcessed", "IncrementalProcessed"]
+        
 
         logging.info("Upserting data into Postgres...")
         
@@ -366,7 +370,7 @@ class Director:
         home_dir = [home_path_cache,""]
         logging.info("[CACHE CLEANUP] Beginning cleaning post-process...")
         home_dir = [home_path_cache, ""]
-        self._db_builder.cache_cleaner(load_type, home_dir[0], "cloud", pathway)
+        self._db_builder.cache_cleaner(load_type_array, home_dir[0], "cloud", pathway)
         logging.info("[CACHE CLEANUP] Cleanup post-process completed.")
  
         return
